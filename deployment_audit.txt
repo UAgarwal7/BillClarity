@@ -1,0 +1,87 @@
+================================================================================
+ BILLCLARITY — DEPLOYMENT & PRODUCTION AUDIT
+ Last updated: 2026-03-14 (17:08 local)
+================================================================================
+
+LEGEND:
+  [DONE] Fully implemented
+  [WAIT] Blocked by infrastructure or user input
+  [TODO] Not started / Needs integration
+  [ ]    Audit Checkbox
+
+CURRENT STATUS SUMMARY:
+  Backend Code:        100% Core logic implemented (Routers + Services)
+  AI Logic:           100% Gemini prompts + Pipeline wiring complete
+  AWS Infrastructure:  40% (S3/IAM DONE, Lambda/SQS PENDING)
+  Database:            0% (No Atlas URI yet)
+  Frontend:            20% (Page shells exist, API wiring TODO)
+
+================================================================================
+ 1. CORE INFRASTRUCTURE BLOCKS
+================================================================================
+
+  [WAIT] 1.1 MongoDB Atlas Setup
+         - Create M0 Cluster
+         - Allow IP "0.0.0.0/0"
+         - Create DB user
+         - ADD `MONGODB_URI` to backend/.env
+
+  [WAIT] 1.2 AWS Pipeline Deployment (SAM)
+         - Run `sam build` in backend/lambda
+         - Run `sam deploy` to provision:
+             - billclarity-parsing-trigger (Lambda)
+             - billclarity-parsing-jobs (SQS)
+             - billclarity-parsing-dlq (SQS)
+         - ADD `SQS_QUEUE_URL` to backend/.env
+
+  [TODO] 1.3 Vultr Compute Provisioning
+         - 2 vCPU / 4 GB RAM Ubuntu instance
+         - Setup Nginx Reverse Proxy
+         - Setup Gunicorn/Uvicorn systemd service
+
+================================================================================
+ 2. BACKEND FINAL CHECKS
+================================================================================
+
+  [DONE] 2.1 Router Endpoints (Ready for integration)
+  [DONE] 2.2 Extraction Pipeline (Ready for AWS mode)
+  [DONE] 2.3 Appeal Packet PDF Generation (Weasyprint)
+  [DONE] 2.4 WebSocket Call Handler (Ready for frontend)
+  [TODO] 2.5 Run `POST /api/demo/seed` once MongoDB is connected
+         - Verify demo bill loads correctly into new cluster
+
+================================================================================
+ 3. FRONTEND DEPLOYMENT READINESS
+================================================================================
+
+  [TODO] 3.1 API Integration
+         - Wire Upload Page to `POST /api/bills/upload`
+         - Wire Bill Detail Page to GET `/api/bills/:id` (polling)
+         - Wire Analysis/Benchmarks/Insights to their respective endpoints
+         - Wire Appeal Generator to `POST /api/bills/:id/appeal-packet/generate`
+
+  [TODO] 3.2 UI Polish & States
+         - Implement "Extraction In Progress" skeleton/loading states
+         - Implement Toast notifications for success/error
+         - Verify "Plan A" (vibrant dark mode) styling across all components
+
+  [TODO] 3.3 Call Assistant Feature
+         - Wire WebSocket stream to the UI chat interface
+         - Implement manual text input + AI response display
+
+================================================================================
+ 4. ENVIRONMENT & SECURITY AUDIT
+================================================================================
+
+  [ ] 4.1 Verify .env on production server
+  [ ] 4.2 Verify CORS `ALLOWED_ORIGINS` for production domain
+  [ ] 4.3 Lock down S3 bucket policies once Lambda is confirmed
+  [ ] 4.4 Check Gemini API quota for live demo
+
+================================================================================
+ 5. STRETCH GOAL AUDIT (Hackathon Ready)
+================================================================================
+
+  [ ] 5.1 ElevenLabs TTS integration (Needs API Key in .env)
+  [ ] 5.2 n8n Orchestration (Self-hosted on Vultr)
+  [ ] 5.3 Custom Domain + SSL (Cloudflare/Certbot)
