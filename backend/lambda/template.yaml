@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: BillClarity Parsing Pipeline — S3 → Lambda → SQS → Textract → Comprehend Medical
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  MongoDBUri:
+    Type: String
+    NoEcho: true
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+  S3BucketName:
+    Type: String
+    Default: billclarity-docs
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 300
+    MemorySize: 512
+    Environment:
+      Variables:
+        MONGODB_URI: !Ref MongoDBUri
+        GEMINI_API_KEY: !Ref GeminiApiKey
+        S3_BUCKET_NAME: !Ref S3BucketName
+        SQS_QUEUE_URL: !Ref ParsingQueue
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # --- S3 Bucket for document storage ---
+  DocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins:
+              - 'http://localhost:3000'
+              - 'http://localhost:5173'
+            MaxAge: 3600
+
+  # --- SQS Queue for parsing jobs ---
+  ParsingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'billclarity-parsing-jobs-${Environment}'
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 86400  # 24 hours
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ParsingDLQ.Arn
+        maxReceiveCount: 3
+
+  # --- Dead Letter Queue ---
+  ParsingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'billclarity-parsing-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  # --- Lambda Function: S3 Event Handler ---
+  ParsingTriggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'billclarity-parsing-trigger-${Environment}'
+      Handler: handler.handler
+      CodeUri: .
+      Description: Triggered by S3 uploads, enqueues parsing jobs to SQS
+      Events:
+        S3Upload:
+          Type: S3
+          Properties:
+            Bucket: !Ref DocumentsBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: uploads/
+        SQSProcess:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ParsingQueue.Arn
+            BatchSize: 1
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref S3BucketName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ParsingQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - textract:AnalyzeDocument
+                - textract:StartDocumentAnalysis
+                - textract:GetDocumentAnalysis
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - comprehendmedical:DetectEntitiesV2
+                - comprehendmedical:InferICD10CM
+                - comprehendmedical:InferRxNorm
+              Resource: '*'
+
+Outputs:
+  ParsingTriggerFunctionArn:
+    Description: ARN of the parsing trigger Lambda function
+    Value: !GetAtt ParsingTriggerFunction.Arn
+
+  ParsingQueueUrl:
+    Description: URL of the SQS parsing queue
+    Value: !Ref ParsingQueue
+
+  ParsingDLQUrl:
+    Description: URL of the SQS dead-letter queue
+    Value: !Ref ParsingDLQ
+
+  DocumentsBucketName:
+    Description: Name of the S3 documents bucket
+    Value: !Ref DocumentsBucket

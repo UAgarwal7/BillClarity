@@ -9,6 +9,8 @@
 
 All AI reasoning in BillClarity is powered by **Google Gemini 2.0 Flash** via the `google-generativeai` Python SDK. Gemini handles 12 distinct task types across the parsing pipeline, analysis engine, appeal generation, and call assistant.
 
+**AWS Comprehend Medical** handles medical NLP preprocessing — extracting structured medical entities (medications, procedures, diagnoses) and normalizing billing descriptions to standardized codes (ICD-10, RxNorm). Comprehend Medical output enriches Gemini's context for more accurate classification and extraction.
+
 **ElevenLabs** handles text-to-speech for the call assistant (stretch goal).
 **Speech-to-text** (ElevenLabs STT, Deepgram, or Web Speech API) handles live transcription (stretch goal).
 **n8n** orchestrates the multi-step call workflow (stretch goal).
@@ -76,9 +78,9 @@ Core behavioral rules:
 
 ### 4.1 Document Classification
 
-**When called:** After Textract extraction, before structured data extraction.
+**When called:** After Textract extraction and Comprehend Medical entity detection, before structured data extraction.
 
-**Input:** First 4000 characters of Textract raw text.
+**Input:** First 4000 characters of Textract raw text + Comprehend Medical entities.
 
 ```
 SYSTEM: [Universal system prompt]
@@ -88,6 +90,11 @@ The following text was extracted via OCR from an uploaded medical billing docume
 
 ---
 {textract_raw_text_first_4000_chars}
+---
+
+Comprehend Medical entities detected in this document:
+---
+{comprehend_medical_entities_json}
 ---
 
 TASK:
@@ -120,7 +127,7 @@ CONSTRAINTS:
 
 **When called:** After classification. Produces the structured data that feeds all downstream analysis.
 
-**Input:** Full Textract output (text + table data) + classified document type.
+**Input:** Full Textract output (text + table data) + classified document type + Comprehend Medical entities.
 
 ```
 SYSTEM: [Universal system prompt]
@@ -142,6 +149,11 @@ Extracted tables:
 Extracted key-value pairs:
 ---
 {textract_kv_pairs_json}
+---
+
+Comprehend Medical entities (medications, procedures, diagnoses with normalized codes):
+---
+{comprehend_medical_entities_json}
 ---
 
 TASK:

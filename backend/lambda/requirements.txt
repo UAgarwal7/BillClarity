@@ -1,0 +1,3 @@
+# Lambda-specific dependencies (minimal for cold start performance)
+boto3>=1.34.0
+pymongo>=4.7.0

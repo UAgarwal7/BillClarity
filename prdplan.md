@@ -133,7 +133,19 @@ Uploaded files are stored in **AWS S3** with unique keys. Metadata (filename, co
 - Key-value pairs (e.g., "Total Due: $1,450.00")
 - Document layout information (headers, sections, page structure)
 
-Textract is invoked asynchronously. The backend polls for completion or uses SNS notification.
+Textract is invoked by Lambda after the S3 upload event. The backend polls for completion or uses SNS notification.
+
+#### Layer 2.5 — Medical Entity Extraction
+
+**AWS Comprehend Medical** processes the Textract raw text and extracts structured medical entities:
+
+- **Medications**: Drug names, dosages, routes, frequencies (e.g., "Acetaminophen 1000mg IV" → `J0131`)
+- **Procedures**: Test and treatment descriptions mapped to clinical terminology
+- **Diagnoses**: Medical conditions with ICD-10-CM concept mappings
+- **Anatomy**: Body parts and systems referenced in the document
+- **Normalized codes**: RxNorm concepts for medications, ICD-10-CM concepts for diagnoses
+
+Comprehend Medical entities are passed to Gemini as additional context, improving the accuracy of code identification, billing description normalization, and line item extraction. This is especially valuable for free-text bill descriptions that don't contain explicit billing codes.
 
 #### Layer 3 — Document Classification
 
@@ -583,7 +595,7 @@ Responsibilities:
 - PDF generation for appeal packets
 - Request validation and error handling
 
-The backend runs as a single deployable service (Node.js/Express or Python/FastAPI) on a Vultr compute instance.
+The backend runs as a single deployable service (Python/FastAPI) on a Vultr compute instance. Pipeline orchestration is handled by AWS Lambda.
 
 ### 6.3 Document Storage — AWS S3
 
@@ -597,6 +609,8 @@ Stored objects:
 
 Objects are keyed by `{session_id}/{document_type}/{timestamp}_{filename}`.
 
+S3 Event Notifications trigger Lambda on `s3:ObjectCreated:*` events in the `uploads/` prefix.
+
 ### 6.4 OCR and Table Extraction — AWS Textract
 
 **AWS Textract** extracts text and structured data from uploaded billing documents.
@@ -607,7 +621,39 @@ Capabilities used:
 - **AnalyzeDocument (Tables)**: Table structure extraction with row/column/cell identification
 - **AnalyzeDocument (Forms)**: Key-value pair extraction (e.g., "Patient Name: John Doe")
 
-Textract processes documents asynchronously. The backend submits a job, polls for completion, and retrieves results.
+Textract processes documents asynchronously. Lambda submits a job, polls for completion, and retrieves results.
+
+### 6.4b Medical NLP — AWS Comprehend Medical
+
+**AWS Comprehend Medical** extracts structured medical information from Textract's raw text output.
+
+Capabilities used:
+
+- **DetectEntitiesV2**: Identifies medical entities (medications, procedures, diagnoses, anatomy)
+- **ICD-10-CM Concepts**: Maps medical conditions to standardized diagnosis codes
+- **RxNorm Concepts**: Maps medication names to standardized drug codes
+
+Comprehend Medical runs after Textract and before Gemini. Its output enriches Gemini's context by providing pre-normalized medical terminology that improves extraction accuracy.
+
+### 6.4c Pipeline Orchestration — AWS Lambda
+
+**AWS Lambda** runs the document processing pipeline in a serverless function.
+
+- **Trigger**: S3 `ObjectCreated` event on the `uploads/` prefix
+- **Runtime**: Python 3.11, 512 MB memory, 300s timeout
+- **Flow**: Receive S3 event → enqueue SQS job → run Textract → run Comprehend Medical → invoke Gemini via API → store results in MongoDB
+- **Deployment**: AWS SAM template (`backend/lambda/template.yaml`)
+
+Lambda decouples the parsing pipeline from the FastAPI server, enabling serverless scaling and eliminating the need for long-running background tasks.
+
+### 6.4d Job Queue — AWS SQS
+
+**AWS SQS** provides a reliable job queue between S3 events and pipeline execution.
+
+- **Queue**: `billclarity-parsing-jobs`, standard queue
+- **Dead-letter queue**: `billclarity-parsing-dlq` with 3-retry max
+- **Purpose**: Prevents duplicate processing of the same upload, enables retry on transient failures, and provides visibility into pipeline job status
+- **Message format**: `{ bill_id, s3_keys[], timestamp }`
 
 ### 6.5 AI Reasoning Layer — Google Gemini API
 

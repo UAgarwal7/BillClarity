@@ -7,11 +7,21 @@ from typing import List
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    # AWS
+    # AWS — Core
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
     aws_region: str = "us-east-1"
     s3_bucket_name: str = "billclarity-docs"
+
+    # AWS — SQS
+    sqs_queue_url: str = ""
+    sqs_dlq_url: str = ""
+
+    # AWS — Lambda
+    lambda_function_name: str = "billclarity-parsing-trigger"
+
+    # Pipeline mode: "local" = BackgroundTasks, "aws" = Lambda-driven
+    pipeline_mode: str = "local"
 
     # Google Gemini
     gemini_api_key: str = ""
@@ -30,7 +40,6 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     environment: str = "development"
     allowed_origins: List[str] = [
-        "https://*.base44.app",
         "http://localhost:3000",
         "http://localhost:5173",
     ]
