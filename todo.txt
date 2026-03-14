@@ -1,0 +1,490 @@
+================================================================================
+ BILLCLARITY — DEVELOPMENT ROADMAP & TODO
+ Last updated: 2026-03-14
+================================================================================
+
+LEGEND:
+  [DONE] Fully implemented
+  [PART] Partially implemented (stub exists, logic incomplete)
+  [TODO] Not started
+  [ ]    Checkbox for tracking
+
+STATUS SUMMARY:
+  Backend services:    gemini, benchmark, error_detection, upload, comprehend = DONE
+                       All routers, parsing_pipeline wiring, db layer = TODO
+  Frontend pages:      All 9 pages = stub-only (UI shells with no API wiring)
+  Demo data:           Not seeded
+  Infrastructure:      Not deployed
+
+
+================================================================================
+ PHASE 0 — FOUNDATION (Do this FIRST — blocks everything else)
+================================================================================
+
+  [ ] 0a. Backend DB Layer (backend/db/)
+      - Implement connection.py (MongoDB Atlas connection via motor)
+      - Implement repositories.py with async CRUD for all 5 collections:
+          bills_repo.create(), get_by_id(), update_status(), update()
+          line_items_repo.bulk_create(), get_by_bill_id(), update_one()
+          benchmark_results_repo.bulk_create(), get_by_bill_id()
+          appeal_packets_repo.create(), get_by_id(), update()
+          call_logs_repo.create(), get_by_id(), update(), append_transcript()
+
+  [ ] 0b. Backend Utils (backend/utils/)
+      - Implement utils/s3.py: upload_file_to_s3(), get_presigned_url()
+      - Implement utils/textract_parser.py:
+          parse_textract_response() → { raw_text, tables_json, kv_pairs_json }
+      - Implement utils/pdf_builder.py:
+          render_packet_to_pdf(sections) → bytes (markdown → HTML → weasyprint)
+
+  [ ] 0c. Demo Data Seed
+      - Create backend/data/demo_bill.json with the full ER visit scenario:
+          Bill metadata, 9 line items, benchmark results pre-calculated,
+          all flags pre-populated, insurance insights pre-written
+      - Implement backend/routers/demo.py → POST /api/demo/seed
+          loads demo_bill.json directly into MongoDB (skips pipeline)
+      - This enables the frontend to be demo'd immediately
+
+  [ ] 0d. Backend Startup Test
+      - Confirm uvicorn starts without errors
+      - Confirm MongoDB connection works
+      - Confirm all routers are registered in main.py
+      - Test POST /api/demo/seed returns a valid bill_id
+
+
+================================================================================
+ PHASE 1 — BACKEND ROUTER WIRING (Wire services into endpoints)
+================================================================================
+
+  --- bills.py (backend/routers/bills.py) ---
+
+  [ ] 1a. POST /api/bills/upload
+      - Call handle_upload() from upload_service
+      - Call run_parsing_pipeline() via BackgroundTasks (local mode)
+      - Validate file type (PDF, PNG, JPG, HEIC only)
+      - Validate file size (max 10 MB each)
+      - Return { bill_id, status: "processing" }
+
+  [ ] 1b. GET /api/bills/:bill_id
+      - bills_repo.get_by_id(bill_id)
+      - 404 if not found
+      - Return full bill document
+
+  [ ] 1c. GET /api/bills/:bill_id/line-items
+      - line_items_repo.get_by_bill_id(bill_id)
+      - Return { line_items: [...], total_count: N }
+
+  [ ] 1d. POST /api/bills/:bill_id/confirm-fields
+      - Parse field_corrections from request body
+      - Update each line item in MongoDB
+      - If code was corrected, re-run benchmark for that item
+
+  --- analysis.py (backend/routers/analysis.py) ---
+
+  [ ] 1e. GET /api/bills/:bill_id/explanation
+      - Fetch bill.plain_language_summary from MongoDB
+      - If not yet generated, trigger generate_explanation() on demand
+      - Return { overall_summary, line_item_explanations }
+
+  [ ] 1f. GET /api/bills/:bill_id/errors
+      - Aggregate all flags from line_items where flags array is non-empty
+      - Count by severity (critical, warning, info)
+      - Return { error_summary, errors, cross_document_issues }
+
+  [ ] 1g. GET /api/bills/:bill_id/benchmarks
+      - Fetch benchmark_results by bill_id
+      - Calculate summary: items_above_typical, estimated_savings_low/high
+      - Return { summary, benchmarks }
+
+  [ ] 1h. GET /api/bills/:bill_id/insurance-insights
+      - Return bill.insurance_insights (stored during pipeline)
+      - If not available, trigger match_insurance_rules() on demand
+
+  --- appeal_packets.py (backend/routers/appeal_packets.py) ---
+
+  [ ] 1i. POST /api/bills/:bill_id/appeal-packet/generate
+      - Parse sections list from request body
+      - Fetch bill, line items, benchmarks, insurance insights
+      - Generate each selected section via appeal_service.generate_packet()
+      - Store in appeal_packets collection
+      - Return { packet_id, status: "generating" }
+
+  [ ] 1j. GET /api/appeal-packets/:packet_id
+      - appeal_packets_repo.get_by_id(packet_id)
+      - Return full packet with all sections as markdown
+
+  [ ] 1k. PUT /api/appeal-packets/:packet_id
+      - Parse updated sections from body
+      - appeal_packets_repo.update() with new section content
+
+  [ ] 1l. GET /api/appeal-packets/:packet_id/pdf
+      - Fetch packet, call pdf_service.generate_pdf(sections)
+      - Upload PDF to S3
+      - Return presigned URL or stream file
+
+  --- calls.py (backend/routers/calls.py) ---
+
+  [ ] 1m. POST /api/calls/start
+      - Fetch bill + all analysis data
+      - Call call_service.start_call_session() → strategy + opening_script
+      - Create call_log in MongoDB
+      - Return { call_id, strategy, opening_script, key_points }
+
+  [ ] 1n. WS /api/calls/:call_id/stream
+      - Accept WebSocket
+      - On each received message: append transcript, call process_transcript()
+      - Send back { type: "ai_response", text, strategic_note }
+      - On disconnect: clean up session
+
+  [ ] 1o. POST /api/calls/:call_id/end
+      - Generate call summary via Gemini
+      - Update call_log with outcome, summary, next_steps
+      - Return { summary, outcome, next_steps }
+
+  [ ] 1p. GET /api/calls/:call_id
+      - call_logs_repo.get_by_id(call_id)
+      - Return full call log
+
+
+================================================================================
+ PHASE 2 — PARSING PIPELINE WIRING (backend/services/parsing_pipeline.py)
+================================================================================
+
+  [ ] 2a. Wire steps 5–14 (all marked TODO in parsing_pipeline.py):
+      - Step 5: classify_document(raw_text, comprehend_context)
+      - Step 6: extract_line_items(raw_text, comprehend_context, classification)
+      - Step 7: line_items_repo.bulk_create(items) with bill_id attached
+      - Step 8: benchmark_service.run_benchmarks(items)
+      - Step 9: benchmark_results_repo.bulk_create(benchmark_results)
+      - Step 10: error_detection_service.run_rule_based_checks(items, bill)
+                 + gemini_service.detect_errors_ai(items, rule_flags)
+      - Step 11: line_items_repo.update_one() for each flag (add to flags array)
+      - Step 12: gemini_service.match_insurance_rules(items, bill)
+                 → store in bills_repo.update() as insurance_insights
+      - Step 13: gemini_service.generate_explanation(items, bill)
+                 → store in bills_repo.update() as plain_language_summary
+      - Step 14: calculate_totals() helper, bills_repo.update_status("completed")
+
+  [ ] 2b. Implement classify_document() to pass comprehend_context
+      - Update gemini_service.classify_document() signature to accept
+        comprehend_context and format into prompt
+
+  [ ] 2c. Implement extract_line_items() to pass comprehend_context
+      - Update gemini_service.extract_line_items() to include Comprehend
+        entity data in the prompt
+
+  [ ] 2d. Implement appeal_service.generate_packet()
+      - For each selected section, call the appropriate Gemini function
+      - Return dict of { section_name: markdown_content }
+
+  [ ] 2e. Implement call_service.start_call_session()
+      - Fetch all analysis data for bill
+      - Build negotiation strategy prompt
+      - Return { call_id, strategy, opening_script, key_points }
+
+  [ ] 2f. Implement call_service.process_transcript()
+      - Append new segment to call log
+      - Send transcript context to gemini_service.generate_call_response()
+      - Return AI response + strategic note
+
+  [ ] 2g. Implement insurance_service.py
+      - Thin wrapper around gemini_service.match_insurance_rules()
+
+
+================================================================================
+ PHASE 3 — FRONTEND PAGE IMPLEMENTATION
+================================================================================
+
+  --- Landing Page (src/app/pages/landing-page.tsx) ---
+
+  [ ] 3a. Landing Page [PART — has some content, needs polish]
+      - Hero section: headline + animated medical bill illustration
+      - 3-column feature highlights (Upload → Analyze → Dispute)
+      - "How It Works" 4-step section with icons
+      - Stats bar ("30% of bills contain errors", etc.)
+      - CTA button → navigates to /app
+      - Motion animations on scroll
+
+  --- App Layout (src/app/pages/app-layout.tsx) ---
+
+  [ ] 3b. Sidebar Navigation [PART]
+      - 7 nav items with icons and active route highlighting
+      - Progress indicator per step (grayed if no bill yet)
+      - Bill summary mini-card in sidebar (provider, date, total)
+      - Collapsible on mobile
+
+  --- Upload Page (src/app/pages/upload-page.tsx) ---
+
+  [ ] 3c. Upload Page [PART — drag/drop works, no API]
+      - Add optional context form fields:
+          Insurance Provider, Visit Type dropdown, Suspected Issue, Notes
+      - Wire "Process Documents" button → POST /api/bills/upload
+      - Add processing state: progress steps
+          ("Uploading..." → "Reading document..." → "Analyzing charges...")
+      - Poll GET /api/bills/:bill_id every 2s until completed
+      - Navigate to /app/bill-overview on completion
+      - Show error state on failure
+
+  --- Bill Overview Page (src/app/pages/bill-overview-page.tsx) ---
+
+  [ ] 3d. Bill Overview: Summary Card
+      - Provider, facility, service date, insurance provider
+      - Total billed / allowed / insurance paid / patient owes
+      - Document type badge, overall confidence score
+
+  [ ] 3e. Bill Overview: Plain-Language Explanation
+      - Render Gemini markdown from GET /api/bills/:id/explanation
+      - Per-charge explanation with expand/collapse
+
+  [ ] 3f. Bill Overview: Line Items Table
+      - Fetch from GET /api/bills/:id/line-items
+      - Columns: Date, Description, Code, Qty, Billed, Allowed, You Owe, Risk
+      - Risk badge column (Normal / Needs Review / High Risk)
+      - Click row → slide-over drawer with full flags + benchmark info
+      - Sortable, filterable
+
+  [ ] 3g. Bill Overview: Category Breakdown Chart (Recharts)
+      - Donut/pie chart grouping charges by category
+
+  [ ] 3h. Bill Overview: Payment Flow Visualization (Recharts)
+      - Stacked bar or waterfall: Billed → Allowed → Paid → Owes
+
+  --- Analysis Page (src/app/pages/analysis-page.tsx) ---
+
+  [ ] 3i. Analysis: Issue Summary Cards
+      - Fetch from GET /api/bills/:id/errors
+      - Count badges: X Critical / Y Warnings / Z Info
+      - Animated counters
+
+  [ ] 3j. Analysis: Flagged Items List
+      - Card per flagged item: icon, title, severity badge, explanation, action
+      - "Include in Appeal" toggle per item
+      - Filter by severity (All / Critical / Warning / Info)
+
+  [ ] 3k. Analysis: Risk Heatmap
+      - Grid of line items color-coded by risk_level
+      - Hover popover with detail
+
+  [ ] 3l. Analysis: Cross-Document Validation section
+      - If EOB uploaded: side-by-side mismatches highlighted
+
+  --- Benchmarking Page (src/app/pages/benchmarking-page.tsx) ---
+
+  [ ] 3m. Benchmarking: Summary Banner
+      - Fetch from GET /api/bills/:id/benchmarks
+      - "X of Y charges are above typical pricing"
+      - Total potential savings estimate
+
+  [ ] 3n. Benchmarking: Benchmark Table
+      - Code, Description, Billed, Medicare Rate, Typical Range, Deviation
+      - Colored deviation bar per row
+
+  [ ] 3o. Benchmarking: Deviation Bar Chart (Recharts)
+      - Bar chart: billed vs. typical range with range bands
+      - Sorted by deviation severity
+
+  --- Insurance Insights Page (src/app/pages/insurance-insights-page.tsx) ---
+
+  [ ] 3p. Insurance Insights: Applicable Protections
+      - Fetch from GET /api/bills/:id/insurance-insights
+      - Card per insight: rule name, description, applicability, strength indicator
+
+  [ ] 3q. Insurance Insights: Appeal Triggers
+      - List of appeal triggers with success likelihood badges
+      - Link to "Start Appeal" from here
+
+  [ ] 3r. Insurance Insights: Denial Analysis (if applicable)
+      - Denial code interpretation, common overturn reasons
+
+  --- Appeal Packet Page (src/app/pages/appeal-packet-page.tsx) ---
+
+  [ ] 3s. Appeal Packet: Packet Builder
+      - Checkbox list of all 8 sections to include
+      - "Generate Packet" button → POST /api/bills/:id/appeal-packet/generate
+      - Loading state while generating
+
+  [ ] 3t. Appeal Packet: Section Preview
+      - Tabbed or accordion view of each section
+      - Render markdown content
+      - Inline edit (contenteditable div or markdown editor)
+      - "Regenerate" button per section
+      - PUT /api/appeal-packets/:id on edit save
+
+  [ ] 3u. Appeal Packet: Export Actions
+      - "Download PDF" → GET /api/appeal-packets/:id/pdf
+      - "Copy to Clipboard" for appeal letter section
+
+  --- Call Assistant Page (src/app/pages/call-assistant-page.tsx) ---
+
+  [ ] 3v. Call Assistant: Pre-Call Setup [PART — some UI exists]
+      - Display Gemini-generated strategy (from POST /api/calls/start)
+      - Show key points and negotiation script preview
+      - "Start Call Session" button
+
+  [ ] 3w. Call Assistant: Active Call Interface
+      - Chat-style scrolling transcript (agent in blue, rep in gray)
+      - AI-suggested response card with "Use This" button
+      - Manual text input override
+      - Contextual tip cards
+      - End Call / Pause / View Script / Show Evidence controls
+
+  [ ] 3x. Call Assistant: WebSocket Connection
+      - Connect to WS /api/calls/:id/stream
+      - Send transcript segments on input
+      - Receive and display AI responses
+
+  [ ] 3y. Call Assistant: Post-Call Summary
+      - Display summary + outcome + next steps
+      - Transcript download button
+
+
+================================================================================
+ PHASE 4 — INTEGRATION & END-TO-END TEST
+================================================================================
+
+  [ ] 4a. Connect upload page to real backend (replace any mocks)
+  [ ] 4b. Thread bill_id through app state (React context or URL param)
+  [ ] 4c. All analysis pages read from real API (replace static placeholder data)
+  [ ] 4d. End-to-end test: upload demo PDF → pipeline runs → all pages show data
+  [ ] 4e. Test appeal packet generation and PDF download
+  [ ] 4f. Test call assistant simulated flow (text mode)
+  [ ] 4g. Test demo seed flow (POST /api/demo/seed → instant demo without upload)
+  [ ] 4h. CORS: confirm Base44/local frontend can reach Vultr backend
+
+
+================================================================================
+ PHASE 5 — POLISH & DEMO PREP
+================================================================================
+
+  [ ] 5a. Frontend design polish
+      - Dark theme consistency across all pages
+      - Glassmorphism card styling
+      - Motion animations on page transitions
+      - Skeleton loaders on all data-fetching states
+      - Sonner toast notifications for actions (generate, save, etc.)
+      - Mobile responsive sidebar
+
+  [ ] 5b. Error states on all pages
+      - Network error handling with retry
+      - Empty state components (no bill uploaded yet)
+      - Failed parsing state with guidance
+
+  [ ] 5c. Backend error handling polish
+      - Consistent error response format across all endpoints
+      - Graceful Gemini API fallback (return partial data on timeout)
+
+  [ ] 5d. Load demo_bill.json with clean, polished demo data
+      - Verify all 5 critical/warning flags are realistic
+      - Verify benchmark deviations look dramatic for demo impact
+      - Verify insurance insights text is well-written
+
+  [ ] 5e. Demo rehearsal
+      - Run through all 12 demo steps from prdplan.md
+      - Identify any rough edges or slow load points
+      - Pre-load demo data before presenting
+
+
+================================================================================
+ PHASE 6 — STRETCH GOALS (only if phases 0-4 are complete)
+================================================================================
+
+  [ ] 6a. ElevenLabs TTS integration in call assistant
+      - text_to_speech() function using ElevenLabs streaming API
+      - Play audio in browser on AI response
+
+  [ ] 6b. Browser speech-to-text (Web Speech API)
+      - Capture microphone in call assistant
+      - Auto-send transcript segments via WebSocket
+
+  [ ] 6c. n8n workflow setup for call orchestration
+      - Deploy n8n on Vultr
+      - Implement 3-node workflow (webhook → Gemini → MongoDB)
+
+  [ ] 6d. AWS Lambda parsing deployment
+      - Deploy backend/lambda/handler.py via SAM
+      - Configure S3 event notification trigger
+      - Test AWS mode pipeline end-to-end
+
+  [ ] 6e. Expand benchmark data
+      - Add more CPT codes to benchmark_cpt.json
+      - Add REV codes for facility fees
+
+  [ ] 6f. Multi-file cross-document validation
+      - Full EOB vs bill comparison logic
+      - Surface EOB mismatches in Analysis page
+
+
+================================================================================
+ INFRASTRUCTURE TODO (Do before demo)
+================================================================================
+
+  [ ] INF-1. Provision Vultr Compute instance (2 vCPU, 4 GB RAM, Ubuntu 22.04)
+  [ ] INF-2. Create AWS S3 bucket (billclarity-docs, us-east-1, SSE-S3 encrypted)
+  [ ] INF-3. Create MongoDB Atlas cluster (M0 free tier), create billclarity DB
+  [ ] INF-4. Create MongoDB indexes (see prd-backend.md Section 4.4)
+  [ ] INF-5. Set all environment variables on Vultr instance (see prd-backend.md Section 10)
+  [ ] INF-6. Create AWS IAM user with S3 + Textract + Comprehend Medical permissions
+  [ ] INF-7. Create SQS queue + DLQ (billclarity-parsing-jobs / billclarity-parsing-dlq)
+  [ ] INF-8. Confirm Gemini API key is active and has quota
+
+
+================================================================================
+ CURRENT STATE SUMMARY (as of 2026-03-14)
+================================================================================
+
+BACKEND — WHAT EXISTS:
+  [DONE] gemini_service.py         — All 8 Gemini functions fully wired to prompts
+  [DONE] benchmark_service.py      — Lookup + deviation calc fully implemented
+  [DONE] error_detection_service.py — Rule-based checks fully implemented
+  [DONE] upload_service.py         — S3 upload + bill record creation implemented
+  [DONE] comprehend_service.py     — Comprehend Medical entity detection implemented
+  [DONE] sqs_service.py            — SQS job queue helpers implemented
+  [DONE] lambda/handler.py         — Lambda handler exists
+  [DONE] All 8 prompt templates     — All .txt files in backend/prompts/ exist
+  [DONE] data/benchmark_cpt.json   — CPT benchmark data
+  [DONE] data/benchmark_hcpcs.json — HCPCS benchmark data
+
+  [TODO] All router handlers        — Every endpoint body is stub/pass
+  [TODO] parsing_pipeline steps 5-14 — Infrastructure exists, calls are TODO-commented
+  [TODO] db/connection.py           — MongoDB connection not wired
+  [TODO] db/repositories.py         — All CRUD methods unimplemented
+  [TODO] utils/s3.py                — S3 helpers unimplemented
+  [TODO] utils/textract_parser.py   — Textract response parser unimplemented
+  [TODO] utils/pdf_builder.py       — PDF generation unimplemented
+  [TODO] appeal_service.py          — Stub only
+  [TODO] call_service.py            — Stub only
+  [TODO] insurance_service.py       — Stub only
+  [TODO] pdf_service.py             — Stub only
+  [TODO] Demo data seed             — Not yet created
+
+FRONTEND — WHAT EXISTS:
+  [DONE] Routing and page shells    — All 9 routes and page components exist
+  [DONE] Upload drag-and-drop       — File selection/drop works locally
+  [PART] Call assistant page        — Some UI skeleton exists (~19KB)
+  [DONE] UI component library       — All shadcn/ui components available
+  [TODO] All page content           — Every page needs real UI + API wiring
+  [TODO] API client / fetch layer   — No fetch wrapper or API client exists yet
+  [TODO] App state management       — No React context/store for bill_id, data
+
+
+================================================================================
+ SUGGESTED SPLIT (2 people)
+================================================================================
+
+ PERSON A — Backend + Pipeline
+   Phase 0: db layer, utils, demo seed       [blocks everything]
+   Phase 1: all router wiring (1a–1p)
+   Phase 2: parsing pipeline wiring (2a–2g)
+   INF tasks
+
+ PERSON B — Frontend + Demo
+   Phase 0c: help design demo_bill.json data
+   Phase 3: all frontend pages (3a–3y)
+   Phase 4: integration once Person A has endpoints working
+   Phase 5: polish, error states
+
+ SYNC POINT: After Person A completes Phase 0 (db + demo seed),
+             Person B can use mock/seeded data to build all frontend pages
+             without waiting for the full pipeline.
+
+================================================================================
