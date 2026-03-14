@@ -1,0 +1,11 @@
+{
+  "99281": { "description": "ER Visit Level 1", "medicare_rate": 73.00, "typical_low": 150, "typical_median": 300, "typical_high": 600 },
+  "99282": { "description": "ER Visit Level 2", "medicare_rate": 143.00, "typical_low": 200, "typical_median": 450, "typical_high": 900 },
+  "99283": { "description": "ER Visit Level 3", "medicare_rate": 214.00, "typical_low": 300, "typical_median": 550, "typical_high": 1100 },
+  "99284": { "description": "ER Visit Level 4", "medicare_rate": 340.00, "typical_low": 350, "typical_median": 700, "typical_high": 1300 },
+  "99285": { "description": "ER Visit Level 5", "medicare_rate": 432.00, "typical_low": 350, "typical_median": 800, "typical_high": 1500 },
+  "74177": { "description": "CT Abdomen/Pelvis w/ Contrast", "medicare_rate": 269.00, "typical_low": 500, "typical_median": 1200, "typical_high": 2500 },
+  "85025": { "description": "CBC with Differential", "medicare_rate": 10.59, "typical_low": 30, "typical_median": 80, "typical_high": 200 },
+  "80053": { "description": "Comprehensive Metabolic Panel", "medicare_rate": 14.49, "typical_low": 35, "typical_median": 90, "typical_high": 250 },
+  "96360": { "description": "IV Infusion First Hour", "medicare_rate": 103.00, "typical_low": 150, "typical_median": 350, "typical_high": 700 }
+}

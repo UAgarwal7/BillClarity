@@ -1,0 +1,25 @@
+{
+  "bill": {
+    "provider": "Metro General Hospital",
+    "facility": "Emergency Department",
+    "visit_type": "emergency",
+    "service_date_range": { "start": "2026-02-15", "end": "2026-02-15" },
+    "total_billed": 14365.00,
+    "total_allowed": 6420.00,
+    "total_insurance_paid": 4620.00,
+    "patient_balance": 1800.00,
+    "insurance_provider": "BlueCross BlueShield PPO",
+    "document_type": "hospital_statement"
+  },
+  "line_items": [
+    { "code": "0450", "code_type": "REV", "description": "ER Facility Fee", "quantity": 1, "billed_amount": 4200.00, "allowed_amount": 2800.00, "insurance_paid": 2240.00, "patient_responsibility": 560.00, "category": "facility", "service_date": "2026-02-15" },
+    { "code": "99285", "code_type": "CPT", "description": "ER Physician Eval (Level 5)", "quantity": 1, "billed_amount": 1850.00, "allowed_amount": 832.00, "insurance_paid": 632.00, "patient_responsibility": 200.00, "category": "physician", "service_date": "2026-02-15" },
+    { "code": "74177", "code_type": "CPT", "description": "CT Abdomen/Pelvis w/ Contrast", "quantity": 1, "billed_amount": 3200.00, "allowed_amount": 1200.00, "insurance_paid": 960.00, "patient_responsibility": 240.00, "category": "imaging", "service_date": "2026-02-15" },
+    { "code": "74177", "code_type": "CPT", "description": "CT Abdomen/Pelvis w/ Contrast", "quantity": 1, "billed_amount": 3200.00, "allowed_amount": 1200.00, "insurance_paid": 960.00, "patient_responsibility": 240.00, "category": "imaging", "service_date": "2026-02-15" },
+    { "code": "85025", "code_type": "CPT", "description": "CBC Blood Test", "quantity": 1, "billed_amount": 450.00, "allowed_amount": 80.00, "insurance_paid": 64.00, "patient_responsibility": 16.00, "category": "lab", "service_date": "2026-02-15" },
+    { "code": "80053", "code_type": "CPT", "description": "Comprehensive Metabolic Panel", "quantity": 1, "billed_amount": 380.00, "allowed_amount": 90.00, "insurance_paid": 72.00, "patient_responsibility": 18.00, "category": "lab", "service_date": "2026-02-15" },
+    { "code": "96360", "code_type": "CPT", "description": "IV Fluid Administration", "quantity": 1, "billed_amount": 890.00, "allowed_amount": 350.00, "insurance_paid": 280.00, "patient_responsibility": 70.00, "category": "procedure", "service_date": "2026-02-15" },
+    { "code": "J0131", "code_type": "HCPCS", "description": "Acetaminophen Injection 1000mg", "quantity": 1, "billed_amount": 75.00, "allowed_amount": 3.00, "insurance_paid": 2.40, "patient_responsibility": 0.60, "category": "medication", "service_date": "2026-02-15" },
+    { "code": "A4217", "code_type": "HCPCS", "description": "Saline Bag 1000mL", "quantity": 1, "billed_amount": 120.00, "allowed_amount": 7.00, "insurance_paid": 5.60, "patient_responsibility": 1.40, "category": "supply", "service_date": "2026-02-15" }
+  ]
+}

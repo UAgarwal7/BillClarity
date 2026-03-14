@@ -1,0 +1,4 @@
+{
+  "J0131": { "description": "Acetaminophen Injection", "medicare_rate": 0.25, "typical_low": 1, "typical_median": 3, "typical_high": 8 },
+  "A4217": { "description": "Sterile Saline 1000mL", "medicare_rate": 1.50, "typical_low": 3, "typical_median": 7, "typical_high": 15 }
+}
