@@ -20,13 +20,13 @@ CURRENT STATUS SUMMARY:
  1. CORE INFRASTRUCTURE BLOCKS
 ================================================================================
 
-  [WAIT] 1.1 MongoDB Atlas Setup
+  [DONE] 1.1 MongoDB Atlas Setup
          - Create M0 Cluster
          - Allow IP "0.0.0.0/0"
          - Create DB user
          - ADD `MONGODB_URI` to backend/.env
 
-  [WAIT] 1.2 AWS Pipeline Deployment (SAM)
+  [DONE] 1.2 AWS Pipeline Deployment (SAM)
          - Run `sam build` in backend/lambda
          - Run `sam deploy` to provision:
              - billclarity-parsing-trigger (Lambda)
