@@ -1,50 +1,125 @@
 # Calls Router — /api/calls/*
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from pydantic import BaseModel
+from typing import Optional
 
 from services.call_service import start_call_session, process_transcript, end_call_session
-from db.repositories import call_logs_repo
+from db.repositories import call_logs_repo, bills_repo, line_items_repo, benchmark_results_repo
 
 router = APIRouter()
 
 
+class StartCallRequest(BaseModel):
+    bill_id: str
+
+
+class TranscriptMessage(BaseModel):
+    role: str  # "patient" or "representative"
+    text: str
+
+
 @router.post("/start", status_code=201)
-async def start_call(bill_id: str = None):
+async def start_call(request: StartCallRequest):
     """Create a new call session. Gemini generates strategy and opening script."""
-    # TODO: Fetch bill + analysis data
-    # TODO: Generate strategy via Gemini
-    # TODO: Generate opening script
-    # TODO: Create call_log in MongoDB
-    # TODO: Return { call_id, strategy, opening_script, key_points }
-    pass
+    bill = await bills_repo.get_by_id(request.bill_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail={
+            "error": "BILL_NOT_FOUND", "message": f"Bill {request.bill_id} not found."
+        })
+
+    # Gather analysis data for the call
+    items = await line_items_repo.get_by_bill(request.bill_id)
+    benchmarks = await benchmark_results_repo.get_by_bill(request.bill_id)
+
+    errors = []
+    for item in items:
+        errors.extend(item.get("flags", []))
+
+    analysis_data = {
+        "errors": errors,
+        "benchmarks": benchmarks,
+        "insights": bill.get("insurance_insights", {}),
+    }
+
+    result = await start_call_session(
+        bill_id=request.bill_id,
+        bill_metadata=bill,
+        analysis_data=analysis_data,
+    )
+
+    return result
 
 
 @router.websocket("/{call_id}/stream")
 async def call_stream(websocket: WebSocket, call_id: str):
     """WebSocket for real-time call interaction."""
     await websocket.accept()
+
+    # Verify call exists
+    call_log = await call_logs_repo.get_by_id(call_id)
+    if not call_log:
+        await websocket.send_json({"error": "CALL_NOT_FOUND", "message": f"Call {call_id} not found."})
+        await websocket.close()
+        return
+
+    session_context = {
+        "strategy": call_log.get("strategy", ""),
+        "key_points": call_log.get("key_points", []),
+    }
+
     try:
         while True:
             data = await websocket.receive_json()
-            # TODO: Append transcript segment to call session
-            # TODO: Send full context to Gemini
-            # TODO: Return AI response + strategic note
-            pass
+            role = data.get("role", "patient")
+            text = data.get("text", "")
+
+            if not text:
+                await websocket.send_json({"error": "EMPTY_MESSAGE", "message": "Text is required."})
+                continue
+
+            # Process transcript and get AI response
+            result = await process_transcript(
+                call_id=call_id,
+                role=role,
+                text=text,
+                session_context=session_context,
+            )
+
+            await websocket.send_json({
+                "type": "ai_response",
+                "response": result.get("response", ""),
+                "strategic_note": result.get("strategic_note", ""),
+                "escalate": result.get("escalate", False),
+            })
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        try:
+            await websocket.send_json({"error": "INTERNAL_ERROR", "message": str(e)})
+        except Exception:
+            pass
 
 
 @router.post("/{call_id}/end")
 async def end_call(call_id: str):
     """End the call session. Gemini generates summary and outcome."""
-    # TODO: Generate call summary via Gemini
-    # TODO: Update call_log with outcome + next_steps
-    # TODO: Return { summary, outcome, next_steps }
-    pass
+    call_log = await call_logs_repo.get_by_id(call_id)
+    if not call_log:
+        raise HTTPException(status_code=404, detail={
+            "error": "CALL_NOT_FOUND", "message": f"Call {call_id} not found."
+        })
+
+    result = await end_call_session(call_id)
+    return result
 
 
 @router.get("/{call_id}")
 async def get_call_log(call_id: str):
     """Get the complete call log (transcript, AI responses, outcome)."""
-    # TODO: Fetch from call_logs collection
-    pass
+    call_log = await call_logs_repo.get_by_id(call_id)
+    if not call_log:
+        raise HTTPException(status_code=404, detail={
+            "error": "CALL_NOT_FOUND", "message": f"Call {call_id} not found."
+        })
+    return call_log
