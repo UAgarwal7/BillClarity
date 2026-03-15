@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Upload, File, X } from "lucide-react";
+import { Upload, File, X, Loader2 } from "lucide-react";
+import { useFileUpload } from "@/app/hooks/use-file-upload";
 
 export function UploadPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
+  const { upload, uploading, progress, error, result } = useFileUpload();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -105,9 +107,41 @@ export function UploadPage() {
               </div>
             ))}
           </div>
-          <button className="mt-6 px-6 py-2.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
-            Process Documents
-          </button>
+          <div className="flex items-center gap-4 mt-6">
+            <button 
+              onClick={() => upload(files)}
+              disabled={uploading}
+              className="px-6 py-2.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {uploading ? "Uploading..." : "Process Documents"}
+            </button>
+          </div>
+
+          {(uploading || result || error) && (
+            <div className="mt-8 p-6 bg-card border border-border rounded-lg">
+              <h3 className="mb-4 font-semibold text-lg">Pipeline Status</h3>
+              {error ? (
+                <div className="p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-md">
+                  {error}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex justify-between text-sm mb-2 text-muted-foreground">
+                    <span>{progress}%</span>
+                  </div>
+                  <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                    <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                  </div>
+                  {result && (
+                    <div className="mt-4 p-4 bg-green-500/10 text-green-500 border border-green-500/20 rounded-md">
+                      Upload successful! Waiting for AWS background processing... Check the 'My Bills' page in a few moments.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

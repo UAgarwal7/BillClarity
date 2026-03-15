@@ -90,7 +90,7 @@ def handle_s3_event(record):
     db = get_db()
     from bson import ObjectId
     db.bills.update_one(
-        {"_id": ObjectId(bill_id)},
+        {"session_id": bill_id},
         {"$set": {"parsing_status": "queued", "updated_at": datetime.now(timezone.utc)}},
     )
 
@@ -115,7 +115,7 @@ def handle_sqs_event(record):
     try:
         # Update status to processing
         db.bills.update_one(
-            {"_id": ObjectId(bill_id)},
+            {"session_id": bill_id},
             {"$set": {"parsing_status": "processing", "updated_at": datetime.now(timezone.utc)}},
         )
 
@@ -199,7 +199,7 @@ def handle_sqs_event(record):
 
         # Store intermediate results in MongoDB for the Gemini pipeline to consume
         db.bills.update_one(
-            {"_id": ObjectId(bill_id)},
+            {"session_id": bill_id},
             {
                 "$set": {
                     "textract_results": all_textract_results,
@@ -216,7 +216,7 @@ def handle_sqs_event(record):
     except Exception as e:
         print(f"Error processing bill {bill_id}: {str(e)}")
         db.bills.update_one(
-            {"_id": ObjectId(bill_id)},
+            {"session_id": bill_id},
             {
                 "$set": {
                     "parsing_status": "failed",

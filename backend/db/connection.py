@@ -2,6 +2,7 @@
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import settings
+import certifi
 
 client: AsyncIOMotorClient = None
 db = None
@@ -10,7 +11,12 @@ db = None
 async def connect_db():
     """Connect to MongoDB Atlas on app startup."""
     global client, db
-    client = AsyncIOMotorClient(settings.mongodb_uri)
+    print(f"DEBUG: Pydantic loaded MONGODB_URI = {settings.mongodb_uri[:40]}...")
+    client = AsyncIOMotorClient(
+        settings.mongodb_uri,
+        serverSelectionTimeoutMS=5000,
+        tlsCAFile=certifi.where()
+    )
     db = client["billclarity"]
 
     # Create indexes
