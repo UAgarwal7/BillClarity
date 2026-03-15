@@ -29,9 +29,12 @@ export const callApi = {
     if (apiUrl) {
       wsUrl = apiUrl.replace(/^http/, "ws") + `/api/calls/${callId}/stream`;
     } else {
+      // Same-origin: use current host but route through the API path
+      // Nginx must proxy /api/* including WebSocket upgrade
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       wsUrl = `${protocol}//${window.location.host}/api/calls/${callId}/stream`;
     }
+    console.log("[CallAPI] WebSocket URL:", wsUrl);
     return new WebSocket(wsUrl);
   },
 };

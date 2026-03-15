@@ -1,10 +1,8 @@
 # Call Service — Call session management, real-time Gemini loop
 
-import json
 from datetime import datetime, timezone
 from services.gemini_service import json_dumps, generate_call_response, call_gemini, parse_gemini_json
-from services.elevenlabs_service import text_to_speech_base64
-from db.repositories import call_logs_repo, bills_repo, line_items_repo, benchmark_results_repo
+from db.repositories import call_logs_repo
 
 
 async def start_call_session(bill_id: str, bill_metadata: dict, analysis_data: dict) -> dict:
@@ -56,6 +54,7 @@ Output as JSON:
         "ended_at": None,
         "strategy": strategy,
         "initial_script": opening_script,
+        "key_points": key_points,
         "transcript": [],
         "ai_responses": [],
         "negotiation_outcome": None,
@@ -63,15 +62,13 @@ Output as JSON:
         "next_steps": None,
     })
 
-    # Synthesize opening script to speech
-    opening_audio = await text_to_speech_base64(opening_script)
-
+    # TTS is a stretch goal — skip for MVP to avoid blocking the start flow
     return {
         "call_id": call_id,
         "strategy": strategy,
         "opening_script": opening_script,
         "key_points": key_points,
-        "opening_audio_base64": opening_audio,
+        "opening_audio_base64": None,
     }
 
 
@@ -118,10 +115,8 @@ async def process_transcript(
         {"$push": {"ai_responses": ai_entry}},
     )
 
-    # Synthesize AI response to speech
-    response_text = result.get("response", "")
-    audio_base64 = await text_to_speech_base64(response_text) if response_text else None
-    result["audio_base64"] = audio_base64
+    # TTS is a stretch goal — skip for MVP
+    result["audio_base64"] = None
 
     return result
 

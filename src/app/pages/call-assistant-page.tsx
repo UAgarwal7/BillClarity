@@ -1,31 +1,46 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Phone,
   PhoneOff,
   Pause,
   Play,
   Mic,
+  Send,
   Download,
   Clock,
-  CheckCircle,
   FileText,
   Loader2,
+  Bug,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useCallSession } from "@/app/hooks/use-call-session";
+import type { DebugLogEntry } from "@/app/hooks/use-call-session";
 import type { TranscriptEntry } from "@/app/types/call";
 
 type CallState = "preparation" | "active" | "completed";
 
 export function CallAssistantPage() {
   const { billId } = useBillContext();
-  const { session, transcript, aiResponse, connected, loading, startCall, sendMessage, endCall } =
-    useCallSession(billId);
+  const {
+    session,
+    transcript,
+    aiResponse,
+    connected,
+    loading,
+    loadingStep,
+    debugLog,
+    startCall,
+    sendMessage,
+    endCall,
+  } = useCallSession(billId);
 
   const [callState, setCallState] = useState<CallState>("preparation");
   const [isPaused, setIsPaused] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [durationInterval, setDurationInterval] = useState<ReturnType<typeof setInterval> | null>(null);
+  const [showDebug, setShowDebug] = useState(true);
 
   const handleStartCall = async () => {
     await startCall();
@@ -70,6 +85,7 @@ export function CallAssistantPage() {
         <CallPreparation
           session={session}
           loading={loading}
+          loadingStep={loadingStep}
           onStartCall={handleStartCall}
         />
       )}
@@ -90,6 +106,58 @@ export function CallAssistantPage() {
       {callState === "completed" && (
         <PostCallSummary session={session} transcript={transcript} />
       )}
+
+      {/* Debug Log Panel */}
+      {debugLog.length > 0 && (
+        <div className="mt-8 border border-border rounded-lg bg-card">
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="w-full flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Bug className="w-4 h-4" strokeWidth={1.5} />
+              Debug Log ({debugLog.length} entries)
+            </div>
+            {showDebug ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {showDebug && <DebugPanel entries={debugLog} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DebugPanel({ entries }: { entries: DebugLogEntry[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [entries]);
+
+  const typeColors: Record<string, string> = {
+    info: "text-blue-400",
+    send: "text-green-400",
+    recv: "text-yellow-400",
+    error: "text-red-400",
+    ws: "text-purple-400",
+  };
+
+  return (
+    <div
+      ref={scrollRef}
+      className="max-h-64 overflow-y-auto p-4 pt-0 font-mono text-xs leading-relaxed"
+    >
+      {entries.map((entry, i) => (
+        <div key={i} className="flex gap-2 py-0.5">
+          <span className="text-muted-foreground shrink-0">{entry.time}</span>
+          <span className={`shrink-0 uppercase w-10 ${typeColors[entry.type] ?? "text-muted-foreground"}`}>
+            {entry.type}
+          </span>
+          <span className="text-foreground/80 break-all">{entry.message}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -97,10 +165,12 @@ export function CallAssistantPage() {
 function CallPreparation({
   session,
   loading,
+  loadingStep,
   onStartCall,
 }: {
   session: ReturnType<typeof useCallSession>["session"];
   loading: boolean;
+  loadingStep: string | null;
   onStartCall: () => void;
 }) {
   return (
@@ -140,8 +210,11 @@ function CallPreparation({
           ) : (
             <Phone className="w-5 h-5" strokeWidth={1.5} />
           )}
-          {loading ? "Connecting…" : "Start AI-Assisted Call"}
+          {loading ? "Starting…" : "Start AI-Assisted Call"}
         </button>
+        {loading && loadingStep && (
+          <p className="mt-3 text-sm text-muted-foreground animate-pulse">{loadingStep}</p>
+        )}
       </div>
     </>
   );
@@ -163,14 +236,20 @@ function ActiveCall({
   isPaused: boolean;
   connected: boolean;
   onPause: () => void;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, role?: "patient" | "representative") => void;
   onEndCall: () => void;
 }) {
   const [inputText, setInputText] = useState("");
+  const [inputRole, setInputRole] = useState<"patient" | "representative">("representative");
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [transcript]);
 
   const handleSend = () => {
     if (!inputText.trim()) return;
-    onSendMessage(inputText.trim());
+    onSendMessage(inputText.trim(), inputRole);
     setInputText("");
   };
 
@@ -218,7 +297,9 @@ function ActiveCall({
           <h2 className="text-2xl mb-4">Live Transcript</h2>
           <div className="border border-border rounded-lg bg-card p-6 h-96 overflow-y-auto">
             {transcript.length === 0 ? (
-              <p className="text-muted-foreground text-sm">Waiting for transcript…</p>
+              <p className="text-muted-foreground text-sm">
+                Type what the billing representative says below, and the AI will suggest your response.
+              </p>
             ) : (
               <div className="space-y-4">
                 {transcript.map((item, index) => (
@@ -231,10 +312,7 @@ function ActiveCall({
                             : "bg-secondary text-muted-foreground"
                         }`}
                       >
-                        {item.role === "agent" ? "AI Assistant" : "Representative"}
-                      </span>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {item.timestamp}
+                        {item.role === "agent" ? "You" : "Representative"}
                       </span>
                     </div>
                     <p className="text-sm leading-relaxed pl-2 border-l-2 border-border">
@@ -242,26 +320,51 @@ function ActiveCall({
                     </p>
                   </div>
                 ))}
+                <div ref={transcriptEndRef} />
               </div>
             )}
           </div>
 
           {/* Manual input */}
-          <div className="mt-3 flex gap-2">
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Add to transcript…"
-              className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-background"
-            />
-            <button
-              onClick={handleSend}
-              className="px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 transition-colors inline-flex items-center gap-1"
-            >
-              <Mic className="w-4 h-4" strokeWidth={1.5} />
-            </button>
+          <div className="mt-3 space-y-2">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setInputRole("representative")}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  inputRole === "representative"
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:bg-secondary/50"
+                }`}
+              >
+                Rep said
+              </button>
+              <button
+                onClick={() => setInputRole("patient")}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  inputRole === "patient"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-secondary/50"
+                }`}
+              >
+                I said
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                placeholder={inputRole === "representative" ? "Type what the rep said…" : "Type what you said…"}
+                className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-background"
+              />
+              <button
+                onClick={handleSend}
+                className="px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 transition-colors inline-flex items-center gap-1"
+              >
+                <Send className="w-4 h-4" strokeWidth={1.5} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -277,11 +380,13 @@ function ActiveCall({
             {aiResponse ? (
               <p className="leading-relaxed mb-6">{aiResponse}</p>
             ) : (
-              <p className="text-muted-foreground mb-6 text-sm">Waiting for AI suggestion…</p>
+              <p className="text-muted-foreground mb-6 text-sm">
+                Enter what the representative said to get an AI-suggested response.
+              </p>
             )}
             <div className="space-y-2">
               <button
-                onClick={() => aiResponse && onSendMessage(aiResponse)}
+                onClick={() => aiResponse && onSendMessage(aiResponse, "patient")}
                 disabled={!aiResponse}
                 className="w-full px-4 py-2.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
@@ -356,9 +461,8 @@ function PostCallSummary({
                           : "bg-secondary text-muted-foreground"
                       }`}
                     >
-                      {item.role === "agent" ? "AI Assistant" : "Representative"}
+                      {item.role === "agent" ? "You" : "Representative"}
                     </span>
-                    <span className="text-xs text-muted-foreground font-mono">{item.timestamp}</span>
                   </div>
                   <p className="text-sm leading-relaxed pl-2 border-l-2 border-border">
                     {item.text}
