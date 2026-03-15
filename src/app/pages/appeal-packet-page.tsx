@@ -1,7 +1,9 @@
-import { FileText, AlertCircle, CheckCircle, Download, Printer, Mail, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { FileText, AlertCircle, CheckCircle, Download, Mail, Loader2 } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useAppealPacket } from "@/app/hooks/use-appeal-packet";
 import { MarkdownContent } from "@/app/components/ui/markdown-content";
+import { appealApi } from "@/app/services/appeal-api";
 
 const DEFAULT_SECTIONS = ["bill_explanation", "flagged_issues", "benchmark_analysis", "insurance_insights", "appeal_letter", "negotiation_script"];
 
@@ -42,7 +44,36 @@ const SECTION_META: Record<string, { title: string; description: string; icon: R
 
 export function AppealPacketPage() {
   const { billId } = useBillContext();
-  const { packet, loading, generating, error, generate, exportPdf } = useAppealPacket(billId);
+  const { packet, loading, initialLoading, generating, error, generate, exportPdf } = useAppealPacket(billId);
+  const [downloadingSection, setDownloadingSection] = useState<string | null>(null);
+
+  const handleDownloadSection = async (sectionKey: string) => {
+    if (!packet) return;
+    setDownloadingSection(sectionKey);
+    try {
+      const blob = await appealApi.getSectionPdf(packet._id, sectionKey);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${sectionKey.replace(/_/g, "-")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // fallback: download as text
+      const content = packet.sections[sectionKey];
+      if (content) {
+        const blob = new Blob([content], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${sectionKey.replace(/_/g, "-")}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } finally {
+      setDownloadingSection(null);
+    }
+  };
 
   if (!billId) {
     return (
@@ -54,15 +85,14 @@ export function AppealPacketPage() {
 
   const handleGenerate = () => generate(DEFAULT_SECTIONS);
 
-  const handlePrint = (sectionKey: string) => {
-    const content = packet?.sections[sectionKey];
-    if (!content) return;
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(`<pre style="font-family:sans-serif;white-space:pre-wrap">${content}</pre>`);
-    win.print();
-    win.close();
-  };
+  if (initialLoading) {
+    return (
+      <div className="max-w-6xl mx-auto p-6 lg:p-12 flex items-center gap-3">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        <span className="text-muted-foreground">Loading appeal packet...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-6 lg:p-12">
@@ -105,8 +135,29 @@ export function AppealPacketPage() {
 
       {packet && (
         <>
-          {/* Documents */}
-          <div className="space-y-6 mb-12">
+          {/* Export All — at the top */}
+          <div className="mb-12 p-8 border-2 border-border rounded-lg bg-secondary/30 text-center">
+            <h2 className="text-2xl mb-3">Complete Dispute Packet</h2>
+            <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
+              Download all documents as a single packet ready to submit to your healthcare provider
+              or insurance company.
+            </p>
+            <button
+              onClick={exportPdf}
+              disabled={loading}
+              className="px-8 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2 disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Download className="w-5 h-5" strokeWidth={1.5} />
+              )}
+              Export Dispute Packet
+            </button>
+          </div>
+
+          {/* Individual Sections */}
+          <div className="space-y-6">
             {DEFAULT_SECTIONS.map((key) => {
               const meta = SECTION_META[key];
               const content = packet.sections[key];
@@ -125,49 +176,25 @@ export function AppealPacketPage() {
                           <MarkdownContent>{content}</MarkdownContent>
                         </div>
                       )}
-                      <div className="flex gap-3">
+                      {content && (
                         <button
-                          onClick={exportPdf}
-                          disabled={loading}
+                          onClick={() => handleDownloadSection(key)}
+                          disabled={downloadingSection === key}
                           className="inline-flex items-center gap-2 px-4 py-2 text-sm border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50"
                         >
-                          <Download className="w-4 h-4" strokeWidth={1.5} />
-                          Download PDF
+                          {downloadingSection === key ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" strokeWidth={1.5} />
+                          )}
+                          Download Section
                         </button>
-                        <button
-                          onClick={() => handlePrint(key)}
-                          className="inline-flex items-center gap-2 px-4 py-2 text-sm border border-border rounded-md hover:bg-secondary transition-colors"
-                        >
-                          <Printer className="w-4 h-4" strokeWidth={1.5} />
-                          Print
-                        </button>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
               );
             })}
-          </div>
-
-          {/* Export All */}
-          <div className="p-8 border-2 border-border rounded-lg bg-secondary/30 text-center">
-            <h2 className="text-2xl mb-3">Complete Dispute Packet</h2>
-            <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-              Download all documents as a single packet ready to submit to your healthcare provider
-              or insurance company.
-            </p>
-            <button
-              onClick={exportPdf}
-              disabled={loading}
-              className="px-8 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2 disabled:opacity-50"
-            >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Download className="w-5 h-5" strokeWidth={1.5} />
-              )}
-              Export Dispute Packet
-            </button>
           </div>
         </>
       )}

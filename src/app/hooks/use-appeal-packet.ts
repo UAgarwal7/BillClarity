@@ -1,14 +1,27 @@
 // useAppealPacket — Fetch/create/update appeal packet
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { AppealPacket } from "@/app/types/appeal-packet";
 import { appealApi } from "@/app/services/appeal-api";
 
 export function useAppealPacket(billId: string | null) {
   const [packet, setPacket] = useState<AppealPacket | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-load existing packet for this bill
+  useEffect(() => {
+    if (!billId) {
+      setPacket(null);
+      return;
+    }
+    setInitialLoading(true);
+    appealApi.getPacketByBill(billId).then((existing) => {
+      if (existing) setPacket(existing);
+    }).finally(() => setInitialLoading(false));
+  }, [billId]);
 
   const generate = async (sections: string[]) => {
     if (!billId) return;
@@ -58,5 +71,5 @@ export function useAppealPacket(billId: string | null) {
     }
   };
 
-  return { packet, loading, generating, error, generate, update, exportPdf };
+  return { packet, loading, initialLoading, generating, error, generate, update, exportPdf };
 }

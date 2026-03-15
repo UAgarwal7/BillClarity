@@ -234,6 +234,34 @@ async def run_parsing_pipeline(bill_id: str) -> None:
             "parsing_status": "completed",
         })
 
+        # Step 15: Auto-generate appeal packet
+        try:
+            from services.appeal_service import generate_packet
+            bill = await bills_repo.get_by_id(bill_id)
+            errors = []
+            for item in items:
+                for flag in item.get("flags", []):
+                    errors.append({
+                        **flag,
+                        "description": item.get("description", "Unknown"),
+                        "code": item.get("code"),
+                        "affected_amount": item.get("billed_amount"),
+                    })
+            await generate_packet(
+                bill_id=bill_id,
+                bill_metadata=bill or {},
+                line_items=items,
+                errors=errors,
+                benchmarks=benchmark_results or [],
+                insights=bill.get("insurance_insights", {"insights": [], "appeal_triggers": []}) if bill else {},
+                selected_sections=[
+                    "bill_explanation", "flagged_issues", "benchmark_analysis",
+                    "insurance_insights", "appeal_letter", "negotiation_script",
+                ],
+            )
+        except Exception:
+            pass  # Appeal packet is best-effort
+
     except Exception as e:
         await bills_repo.update_status(bill_id, "failed", error=str(e))
         raise

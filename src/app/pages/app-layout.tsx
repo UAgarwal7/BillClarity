@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation } from "react-router";
 import { Upload, FileText, Search, BarChart3, Shield, FileCheck, Phone, Menu, X } from "lucide-react";
 import { ThemeToggle } from "../components/theme-toggle";
+import { useBillContext } from "@/app/context/bill-context";
 import { useState } from "react";
 
 const navigationItems = [
@@ -16,6 +17,7 @@ const navigationItems = [
 export function AppLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { bill } = useBillContext();
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -35,7 +37,17 @@ export function AppLayout() {
               <span className="font-medium">BillClarity Appeals Engine</span>
             </Link>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-4">
+            {bill && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-md text-sm">
+                <FileText className="w-4 h-4 text-primary" strokeWidth={1.5} />
+                <span className="text-muted-foreground">
+                  {bill.provider ?? bill.facility ?? "Bill"}{bill.total_billed != null ? ` · $${bill.total_billed.toLocaleString()}` : ""}
+                </span>
+              </div>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 

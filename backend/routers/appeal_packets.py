@@ -29,7 +29,7 @@ class UpdatePacketRequest(BaseModel):
     sections: dict
 
 
-@router.post("/bills/{bill_id}/appeal-packet/generate", status_code=201)
+@router.post("/generate/{bill_id}", status_code=201)
 async def generate_appeal_packet(bill_id: str, request: GeneratePacketRequest):
     """Trigger Gemini to generate all selected appeal sections."""
     bill = await bills_repo.get_by_id(bill_id)
@@ -68,7 +68,21 @@ async def generate_appeal_packet(bill_id: str, request: GeneratePacketRequest):
     return {"packet_id": packet_id, "status": "draft"}
 
 
-@router.get("/appeal-packets/{packet_id}")
+@router.get("/bill/{bill_id}")
+async def get_appeal_packet_by_bill(bill_id: str):
+    """Get the most recent appeal packet for a bill."""
+    packets = await appeal_packets_repo.find_by({"bill_id": bill_id})
+    if not packets:
+        raise HTTPException(status_code=404, detail={
+            "error": "PACKET_NOT_FOUND", "message": f"No appeal packet found for bill {bill_id}."
+        })
+    # Return most recent
+    from datetime import datetime
+    packets.sort(key=lambda p: p.get("created_at") or datetime.min, reverse=True)
+    return packets[0]
+
+
+@router.get("/{packet_id}")
 async def get_appeal_packet(packet_id: str):
     """Get all packet sections (markdown content)."""
     packet = await appeal_packets_repo.get_by_id(packet_id)
@@ -79,7 +93,7 @@ async def get_appeal_packet(packet_id: str):
     return packet
 
 
-@router.put("/appeal-packets/{packet_id}")
+@router.put("/{packet_id}")
 async def update_appeal_packet(packet_id: str, request: UpdatePacketRequest):
     """Update edited sections."""
     packet = await appeal_packets_repo.get_by_id(packet_id)
@@ -96,7 +110,7 @@ async def update_appeal_packet(packet_id: str, request: UpdatePacketRequest):
     return {"message": "Packet updated.", "packet_id": packet_id}
 
 
-@router.get("/appeal-packets/{packet_id}/pdf")
+@router.get("/{packet_id}/pdf")
 async def get_appeal_packet_pdf(packet_id: str):
     """Generate and return the PDF bundle."""
     packet = await appeal_packets_repo.get_by_id(packet_id)
@@ -120,4 +134,34 @@ async def get_appeal_packet_pdf(packet_id: str):
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=appeal_packet_{packet_id}.pdf"},
+    )
+
+
+@router.get("/{packet_id}/pdf/{section_key}")
+async def get_section_pdf(packet_id: str, section_key: str):
+    """Generate and return a PDF for a single section."""
+    packet = await appeal_packets_repo.get_by_id(packet_id)
+    if not packet:
+        raise HTTPException(status_code=404, detail={
+            "error": "PACKET_NOT_FOUND", "message": f"Packet {packet_id} not found."
+        })
+
+    content = packet.get("sections", {}).get(section_key)
+    if content is None:
+        raise HTTPException(status_code=404, detail={
+            "error": "SECTION_NOT_FOUND", "message": f"Section '{section_key}' not found in packet."
+        })
+
+    bill_id = packet.get("bill_id")
+    bill = await bills_repo.get_by_id(bill_id) if bill_id else {}
+
+    from utils.pdf_builder import build_appeal_html, render_pdf
+    html = build_appeal_html({section_key: content}, bill or {})
+    pdf_bytes = render_pdf(html)
+
+    safe_name = section_key.replace("_", "-")
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={safe_name}_{packet_id}.pdf"},
     )
