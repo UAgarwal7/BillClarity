@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AppealPacket } from "@/app/types/appeal-packet";
+import { appealApi } from "@/app/services/appeal-api";
 
 export function useAppealPacket(billId: string | null) {
   const [packet, setPacket] = useState<AppealPacket | null>(null);
@@ -9,14 +10,53 @@ export function useAppealPacket(billId: string | null) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // TODO: generate(sections) → POST /api/bills/:billId/appeal-packet/generate
-  // TODO: fetch(packetId) → GET /api/appeal-packets/:packetId
-  // TODO: update(packetId, sections) → PUT /api/appeal-packets/:packetId
-  // TODO: exportPdf(packetId) → GET /api/appeal-packets/:packetId/pdf
+  const generate = async (sections: string[]) => {
+    if (!billId) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const { packet_id } = await appealApi.generate(billId, sections);
+      const packetData = await appealApi.getPacket(packet_id);
+      setPacket(packetData);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to generate appeal packet";
+      setError(msg);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
-  const generate = async (_sections: string[]) => {};
-  const update = async (_sections: Record<string, string>) => {};
-  const exportPdf = async () => {};
+  const update = async (sections: Record<string, string>) => {
+    if (!packet) return;
+    try {
+      await appealApi.updatePacket(packet._id, sections);
+      setPacket((prev) =>
+        prev ? { ...prev, sections: { ...prev.sections, ...sections } } : null
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to update packet";
+      setError(msg);
+    }
+  };
+
+  const exportPdf = async () => {
+    if (!packet) return;
+    setLoading(true);
+    try {
+      const blob = await appealApi.getPdf(packet._id);
+      const url = URL.createObjectURL(blob as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "appeal-packet.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to export PDF";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return { packet, loading, generating, error, generate, update, exportPdf };
 }

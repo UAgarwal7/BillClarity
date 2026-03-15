@@ -25,7 +25,7 @@ export function useFileUpload() {
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      const apiUrl = import.meta.env.VITE_API_URL || "";
       xhr.open("POST", `${apiUrl}/api/bills/upload`);
 
       xhr.upload.onprogress = (event) => {

@@ -24,7 +24,14 @@ export const callApi = {
 
   /** Create WebSocket connection for real-time call */
   createStream: (callId: string): WebSocket => {
-    const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/calls/${callId}/stream`;
+    const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+    let wsUrl: string;
+    if (apiUrl) {
+      wsUrl = apiUrl.replace(/^http/, "ws") + `/api/calls/${callId}/stream`;
+    } else {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      wsUrl = `${protocol}//${window.location.host}/api/calls/${callId}/stream`;
+    }
     return new WebSocket(wsUrl);
   },
 };
