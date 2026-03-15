@@ -28,3 +28,16 @@ export interface CallSession {
   next_steps: string | null;
   notes: string | null;
 }
+
+/** Lightweight summary returned by the list endpoint (no transcript/ai_responses). */
+export interface CallSummary {
+  _id: string;
+  bill_id: string;
+  started_at: string;
+  ended_at: string | null;
+  strategy: string;
+  initial_script: string;
+  negotiation_outcome: CallOutcome;
+  summary: string | null;
+  next_steps: string | null;
+}

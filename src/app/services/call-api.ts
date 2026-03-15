@@ -1,8 +1,13 @@
 // Call API — /api/calls/* + WebSocket connection
 
 import { apiClient } from "./api-client";
+import type { CallSession, CallSummary } from "@/app/types/call";
 
 export const callApi = {
+  /** List all calls for a bill (summaries only) */
+  listByBill: (billId: string) =>
+    apiClient.get<{ calls: CallSummary[] }>(`/api/calls/bill/${billId}`),
+
   /** Start a new call session */
   start: (billId: string) =>
     apiClient.post<{
@@ -20,7 +25,7 @@ export const callApi = {
 
   /** Get full call log */
   getCallLog: (callId: string) =>
-    apiClient.get(`/api/calls/${callId}`),
+    apiClient.get<CallSession>(`/api/calls/${callId}`),
 
   /** Create WebSocket connection for real-time call */
   createStream: (callId: string): WebSocket => {

@@ -75,11 +75,11 @@ Output as JSON:
 async def process_transcript(
     call_id: str, role: str, text: str, session_context: dict
 ) -> dict:
-    """Process incoming transcript segment and generate AI response.
+    """Process incoming transcript segment.
 
-    Returns { response, strategic_note, escalate }.
+    Only generates an AI response when the representative speaks (turn-by-turn).
+    Patient messages are saved to the transcript but don't trigger Gemini.
     """
-    # Append transcript entry to MongoDB
     entry = {
         "role": role,
         "text": text,
@@ -87,37 +87,50 @@ async def process_transcript(
     }
     await call_logs_repo.append_transcript(call_id, entry)
 
-    # Fetch full call log for context
+    if role == "patient":
+        return {
+            "type": "transcript_saved",
+            "response": "",
+            "strategic_note": "",
+            "escalate": False,
+            "audio_base64": None,
+        }
+
     call_log = await call_logs_repo.get_by_id(call_id)
     if not call_log:
-        return {"response": "Session not found.", "strategic_note": "", "escalate": False}
+        return {"type": "ai_response", "response": "Session not found.", "strategic_note": "", "escalate": False, "audio_base64": None}
 
     transcript = call_log.get("transcript", [])
     strategy = call_log.get("strategy", "")
     key_points = session_context.get("key_points", "")
 
-    # Generate AI response
-    result = await generate_call_response(
-        strategy=strategy,
-        key_points=json_dumps(key_points) if isinstance(key_points, list) else str(key_points),
-        transcript=transcript,
-        latest_message=text,
-    )
+    try:
+        result = await generate_call_response(
+            strategy=strategy,
+            key_points=json_dumps(key_points) if isinstance(key_points, list) else str(key_points),
+            transcript=transcript,
+            latest_message=text,
+        )
+    except Exception:
+        result = {
+            "response": "I'd like to continue discussing the specific charges on my bill. Could you help me review them?",
+            "strategic_note": "Gemini returned malformed response — using safe fallback.",
+            "escalate": False,
+        }
 
-    # Save AI response to call log
     ai_entry = {
         "prompt_context": f"Transcript ({len(transcript)} entries)",
         "response": result.get("response", ""),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    from bson import ObjectId
     await call_logs_repo.collection.update_one(
-        {"_id": call_log["_id"]} if "_id" in call_log else {},
+        {"_id": ObjectId(call_id)},
         {"$push": {"ai_responses": ai_entry}},
     )
 
-    # TTS is a stretch goal — skip for MVP
+    result["type"] = "ai_response"
     result["audio_base64"] = None
-
     return result
 
 

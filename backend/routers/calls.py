@@ -21,6 +21,13 @@ class TranscriptMessage(BaseModel):
     text: str
 
 
+@router.get("/bill/{bill_id}")
+async def list_calls_for_bill(bill_id: str):
+    """List all call sessions for a bill (summary only, no transcript)."""
+    calls = await call_logs_repo.get_by_bill(bill_id)
+    return {"calls": calls}
+
+
 @router.post("/start", status_code=201)
 async def start_call(request: StartCallRequest):
     """Create a new call session. Gemini generates strategy and opening script."""
@@ -80,7 +87,6 @@ async def call_stream(websocket: WebSocket, call_id: str):
                 await websocket.send_json({"error": "EMPTY_MESSAGE", "message": "Text is required."})
                 continue
 
-            # Process transcript and get AI response
             result = await process_transcript(
                 call_id=call_id,
                 role=role,
@@ -89,7 +95,7 @@ async def call_stream(websocket: WebSocket, call_id: str):
             )
 
             await websocket.send_json({
-                "type": "ai_response",
+                "type": result.get("type", "ai_response"),
                 "response": result.get("response", ""),
                 "strategic_note": result.get("strategic_note", ""),
                 "escalate": result.get("escalate", False),

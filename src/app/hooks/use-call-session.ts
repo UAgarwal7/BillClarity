@@ -83,8 +83,10 @@ export function useCallSession(billId: string | null) {
         try {
           const msg = JSON.parse(event.data as string);
           log("recv", `WS message: ${JSON.stringify(msg).slice(0, 200)}`);
-          if (msg.type === "ai_response") {
+          if (msg.type === "ai_response" && msg.response) {
             setAiResponse(msg.response as string);
+          } else if (msg.type === "transcript_saved") {
+            // Patient message saved — no AI response expected
           } else if (msg.error) {
             log("error", `Server error: ${msg.error} — ${msg.message}`);
           }
@@ -104,11 +106,13 @@ export function useCallSession(billId: string | null) {
 
   const sendMessage = (text: string, role: "patient" | "representative" = "patient") => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      // Add to local transcript immediately
       setTranscript((prev) => [
         ...prev,
         { role: role === "patient" ? "agent" : "representative", text, timestamp: new Date().toISOString() },
       ]);
+      if (role === "patient") {
+        setAiResponse(null);
+      }
       const payload = { role, text };
       log("send", `WS send: ${JSON.stringify(payload).slice(0, 200)}`);
       wsRef.current.send(JSON.stringify(payload));
@@ -149,6 +153,20 @@ export function useCallSession(billId: string | null) {
     setConnected(false);
   };
 
+  const reset = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setSession(null);
+    setTranscript([]);
+    setAiResponse(null);
+    setConnected(false);
+    setLoading(false);
+    setLoadingStep(null);
+    setDebugLog([]);
+  };
+
   return {
     session,
     transcript,
@@ -160,5 +178,6 @@ export function useCallSession(billId: string | null) {
     startCall,
     sendMessage,
     endCall,
+    reset,
   };
 }

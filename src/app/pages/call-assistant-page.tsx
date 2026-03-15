@@ -1,10 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Phone,
   PhoneOff,
   Pause,
   Play,
-  Mic,
   Send,
   Download,
   Clock,
@@ -13,38 +12,76 @@ import {
   Bug,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
+  Plus,
+  PhoneCall,
+  CheckCircle2,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useCallSession } from "@/app/hooks/use-call-session";
 import type { DebugLogEntry } from "@/app/hooks/use-call-session";
-import type { TranscriptEntry } from "@/app/types/call";
+import type { TranscriptEntry, CallSummary, CallSession } from "@/app/types/call";
+import { callApi } from "@/app/services/call-api";
 
-type CallState = "preparation" | "active" | "completed";
+type PageView = "history" | "new-call" | "active-call" | "view-call";
 
 export function CallAssistantPage() {
   const { billId } = useBillContext();
-  const {
-    session,
-    transcript,
-    aiResponse,
-    connected,
-    loading,
-    loadingStep,
-    debugLog,
-    startCall,
-    sendMessage,
-    endCall,
-  } = useCallSession(billId);
+  const callSession = useCallSession(billId);
 
-  const [callState, setCallState] = useState<CallState>("preparation");
+  const [view, setView] = useState<PageView>("history");
+  const [pastCalls, setPastCalls] = useState<CallSummary[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedCall, setSelectedCall] = useState<CallSession | null>(null);
+  const [loadingCallDetail, setLoadingCallDetail] = useState(false);
+
   const [isPaused, setIsPaused] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [durationInterval, setDurationInterval] = useState<ReturnType<typeof setInterval> | null>(null);
-  const [showDebug, setShowDebug] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);
+
+  const fetchHistory = useCallback(async () => {
+    if (!billId) return;
+    setLoadingHistory(true);
+    try {
+      const data = await callApi.listByBill(billId);
+      setPastCalls(data.calls);
+    } catch (e) {
+      console.error("Failed to load call history", e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [billId]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  const handleViewCall = async (callId: string) => {
+    setLoadingCallDetail(true);
+    try {
+      const data = await callApi.getCallLog(callId);
+      setSelectedCall(data);
+      setView("view-call");
+    } catch (e) {
+      console.error("Failed to load call", e);
+    } finally {
+      setLoadingCallDetail(false);
+    }
+  };
+
+  const handleNewCall = () => {
+    callSession.reset();
+    setCallDuration(0);
+    setIsPaused(false);
+    setView("new-call");
+  };
 
   const handleStartCall = async () => {
-    await startCall();
-    setCallState("active");
+    await callSession.startCall();
+    setView("active-call");
     const interval = setInterval(() => setCallDuration((d) => d + 1), 1000);
     setDurationInterval(interval);
   };
@@ -54,8 +91,15 @@ export function CallAssistantPage() {
       clearInterval(durationInterval);
       setDurationInterval(null);
     }
-    await endCall();
-    setCallState("completed");
+    await callSession.endCall();
+    await fetchHistory();
+  };
+
+  const handleBackToHistory = () => {
+    callSession.reset();
+    setSelectedCall(null);
+    setView("history");
+    fetchHistory();
   };
 
   const formatDuration = (seconds: number) => {
@@ -75,40 +119,71 @@ export function CallAssistantPage() {
   return (
     <div className="max-w-6xl mx-auto p-6 lg:p-12">
       <div className="mb-8">
-        <h1 className="text-3xl mb-2">Call Assistant</h1>
-        <p className="text-muted-foreground">
-          AI-assisted phone negotiation with billing departments.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl mb-2">Call Assistant</h1>
+            <p className="text-muted-foreground">
+              AI-assisted phone negotiation with billing departments.
+            </p>
+          </div>
+          {view !== "history" && (
+            <button
+              onClick={handleBackToHistory}
+              className="px-4 py-2 border border-border rounded-md hover:bg-secondary transition-colors inline-flex items-center gap-2 text-sm"
+            >
+              <ArrowLeft className="w-4 h-4" strokeWidth={1.5} />
+              All Calls
+            </button>
+          )}
+        </div>
       </div>
 
-      {callState === "preparation" && (
+      {view === "history" && (
+        <CallHistory
+          calls={pastCalls}
+          loading={loadingHistory}
+          loadingCallId={loadingCallDetail ? "loading" : null}
+          onViewCall={handleViewCall}
+          onNewCall={handleNewCall}
+        />
+      )}
+
+      {view === "new-call" && (
         <CallPreparation
-          session={session}
-          loading={loading}
-          loadingStep={loadingStep}
+          session={callSession.session}
+          loading={callSession.loading}
+          loadingStep={callSession.loadingStep}
           onStartCall={handleStartCall}
         />
       )}
 
-      {callState === "active" && (
-        <ActiveCall
-          transcript={transcript}
-          aiResponse={aiResponse}
-          duration={formatDuration(callDuration)}
-          isPaused={isPaused}
-          connected={connected}
-          onPause={() => setIsPaused(!isPaused)}
-          onSendMessage={sendMessage}
-          onEndCall={handleEndCall}
-        />
+      {view === "active-call" && (
+        <>
+          <ActiveCall
+            transcript={callSession.transcript}
+            aiResponse={callSession.aiResponse}
+            duration={formatDuration(callDuration)}
+            isPaused={isPaused}
+            connected={callSession.connected}
+            onPause={() => setIsPaused(!isPaused)}
+            onSendMessage={callSession.sendMessage}
+            onEndCall={handleEndCall}
+          />
+          {callSession.session?.summary && (
+            <PostCallSummary
+              session={callSession.session}
+              transcript={callSession.transcript}
+              onBackToHistory={handleBackToHistory}
+            />
+          )}
+        </>
       )}
 
-      {callState === "completed" && (
-        <PostCallSummary session={session} transcript={transcript} />
+      {view === "view-call" && selectedCall && (
+        <CallDetailView call={selectedCall} onBack={handleBackToHistory} />
       )}
 
-      {/* Debug Log Panel */}
-      {debugLog.length > 0 && (
+      {callSession.debugLog.length > 0 && (view === "new-call" || view === "active-call") && (
         <div className="mt-8 border border-border rounded-lg bg-card">
           <button
             onClick={() => setShowDebug(!showDebug)}
@@ -116,16 +191,272 @@ export function CallAssistantPage() {
           >
             <div className="flex items-center gap-2 text-sm font-medium">
               <Bug className="w-4 h-4" strokeWidth={1.5} />
-              Debug Log ({debugLog.length} entries)
+              Debug Log ({callSession.debugLog.length} entries)
             </div>
             {showDebug ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
-          {showDebug && <DebugPanel entries={debugLog} />}
+          {showDebug && <DebugPanel entries={callSession.debugLog} />}
         </div>
       )}
     </div>
   );
 }
+
+/* ─── Call History List ─── */
+
+function CallHistory({
+  calls,
+  loading,
+  loadingCallId,
+  onViewCall,
+  onNewCall,
+}: {
+  calls: CallSummary[];
+  loading: boolean;
+  loadingCallId: string | null;
+  onViewCall: (id: string) => void;
+  onNewCall: () => void;
+}) {
+  const outcomeConfig: Record<string, { label: string; icon: typeof CheckCircle2; className: string }> = {
+    resolved: { label: "Resolved", icon: CheckCircle2, className: "text-green-400 bg-green-400/10" },
+    escalated: { label: "Escalated", icon: AlertTriangle, className: "text-yellow-400 bg-yellow-400/10" },
+    follow_up: { label: "Follow Up", icon: RotateCcw, className: "text-blue-400 bg-blue-400/10" },
+    unresolved: { label: "Unresolved", icon: PhoneOff, className: "text-muted-foreground bg-secondary" },
+  };
+
+  return (
+    <>
+      <div className="mb-6">
+        <button
+          onClick={onNewCall}
+          className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2"
+        >
+          <Plus className="w-5 h-5" strokeWidth={1.5} />
+          Start New Call
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : calls.length === 0 ? (
+        <div className="p-12 border-2 border-dashed border-border rounded-lg text-center">
+          <PhoneCall className="w-12 h-12 mx-auto mb-4 text-muted-foreground" strokeWidth={1.5} />
+          <h2 className="text-xl mb-2">No calls yet</h2>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            Start your first AI-assisted call to negotiate your medical bill. The AI will generate a strategy and guide you through the conversation.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {calls.map((call) => {
+            const outcome = call.negotiation_outcome
+              ? outcomeConfig[call.negotiation_outcome]
+              : null;
+            const OutcomeIcon = outcome?.icon;
+            const started = new Date(call.started_at);
+            const duration =
+              call.ended_at
+                ? Math.round(
+                    (new Date(call.ended_at).getTime() - started.getTime()) / 1000
+                  )
+                : null;
+
+            return (
+              <button
+                key={call._id}
+                onClick={() => onViewCall(call._id)}
+                disabled={!!loadingCallId}
+                className="w-full text-left p-5 border border-border rounded-lg bg-card hover:bg-secondary/30 transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Phone className="w-4 h-4 text-primary shrink-0" strokeWidth={1.5} />
+                      <span className="font-medium">
+                        {started.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}{" "}
+                        at{" "}
+                        {started.toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      {duration !== null && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3" strokeWidth={1.5} />
+                          {Math.floor(duration / 60)}:{(duration % 60).toString().padStart(2, "0")}
+                        </span>
+                      )}
+                    </div>
+                    {call.summary && (
+                      <p className="text-sm text-muted-foreground line-clamp-2 pl-7">
+                        {call.summary}
+                      </p>
+                    )}
+                    {!call.summary && call.strategy && (
+                      <p className="text-sm text-muted-foreground line-clamp-2 pl-7">
+                        Strategy: {call.strategy}
+                      </p>
+                    )}
+                  </div>
+                  {outcome && OutcomeIcon && (
+                    <span
+                      className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 ${outcome.className}`}
+                    >
+                      <OutcomeIcon className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      {outcome.label}
+                    </span>
+                  )}
+                  {!call.ended_at && (
+                    <span className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium text-orange-400 bg-orange-400/10">
+                      In Progress
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ─── Call Detail View (past call) ─── */
+
+function CallDetailView({ call, onBack }: { call: CallSession; onBack: () => void }) {
+  const outcomeLabels: Record<string, string> = {
+    resolved: "Resolved",
+    escalated: "Escalated",
+    follow_up: "Follow Up Needed",
+    unresolved: "Unresolved",
+  };
+
+  const duration =
+    call.ended_at && call.started_at
+      ? Math.round(
+          (new Date(call.ended_at).getTime() - new Date(call.started_at).getTime()) / 1000
+        )
+      : null;
+
+  return (
+    <>
+      {/* Header */}
+      <div className="mb-8 p-6 border border-border rounded-lg bg-card">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-2xl mb-1">
+              Call —{" "}
+              {new Date(call.started_at).toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </h2>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span>
+                {new Date(call.started_at).toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+              {duration !== null && (
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  {Math.floor(duration / 60)}:{(duration % 60).toString().padStart(2, "0")}
+                </span>
+              )}
+            </div>
+          </div>
+          {call.negotiation_outcome && (
+            <div className="px-4 py-2 bg-primary/10 text-primary rounded-md text-sm font-medium">
+              {outcomeLabels[call.negotiation_outcome] ?? call.negotiation_outcome}
+            </div>
+          )}
+        </div>
+        {call.summary && (
+          <p className="text-muted-foreground leading-relaxed">{call.summary}</p>
+        )}
+      </div>
+
+      {/* Strategy */}
+      <div className="mb-8">
+        <h2 className="text-2xl mb-4">Strategy Used</h2>
+        <div className="p-6 border border-border rounded-lg bg-card">
+          <p className="leading-relaxed text-muted-foreground">{call.strategy}</p>
+        </div>
+      </div>
+
+      {/* Next Steps */}
+      {call.next_steps && (
+        <div className="mb-8">
+          <h2 className="text-2xl mb-4">Recommended Next Steps</h2>
+          <div className="p-6 border border-border rounded-lg bg-card">
+            <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
+              {call.next_steps}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Transcript */}
+      {call.transcript && call.transcript.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-2xl mb-4">Full Transcript</h2>
+          <div className="border border-border rounded-lg bg-card p-6">
+            <div className="space-y-4">
+              {call.transcript.map((item, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-1 rounded text-xs ${
+                        item.role === "agent" || item.role === "patient"
+                          ? "bg-primary/10 text-primary"
+                          : "bg-secondary text-muted-foreground"
+                      }`}
+                    >
+                      {item.role === "agent" || item.role === "patient" ? "You" : "Representative"}
+                    </span>
+                    {item.timestamp && (
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(item.timestamp).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm leading-relaxed pl-2 border-l-2 border-border">
+                    {item.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Back */}
+      <div className="text-center">
+        <button
+          onClick={onBack}
+          className="px-6 py-3 border border-border rounded-md hover:bg-secondary transition-colors inline-flex items-center gap-2"
+        >
+          <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
+          Back to All Calls
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* ─── Debug Panel ─── */
 
 function DebugPanel({ entries }: { entries: DebugLogEntry[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -161,6 +492,8 @@ function DebugPanel({ entries }: { entries: DebugLogEntry[] }) {
     </div>
   );
 }
+
+/* ─── Call Preparation (new call) ─── */
 
 function CallPreparation({
   session,
@@ -219,6 +552,8 @@ function CallPreparation({
     </>
   );
 }
+
+/* ─── Active Call ─── */
 
 function ActiveCall({
   transcript,
@@ -400,12 +735,16 @@ function ActiveCall({
   );
 }
 
+/* ─── Post-Call Summary (inline after ending) ─── */
+
 function PostCallSummary({
   session,
   transcript,
+  onBackToHistory,
 }: {
   session: ReturnType<typeof useCallSession>["session"];
   transcript: TranscriptEntry[];
+  onBackToHistory: () => void;
 }) {
   return (
     <>
@@ -474,22 +813,14 @@ function PostCallSummary({
         </div>
       )}
 
-      <div className="p-8 border-2 border-border rounded-lg bg-secondary/30 text-center">
-        <FileText className="w-12 h-12 mx-auto mb-4 text-primary" strokeWidth={1.5} />
-        <h2 className="text-2xl mb-3">Export Documentation</h2>
-        <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-          Download an updated appeal packet including call transcript, agreements, and next steps.
-        </p>
-        <div className="flex gap-4 justify-center">
-          <button className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2">
-            <Download className="w-5 h-5" strokeWidth={1.5} />
-            Download Updated Appeal Packet
-          </button>
-          <button className="px-6 py-3 border border-border rounded-md hover:bg-secondary transition-colors inline-flex items-center gap-2">
-            <Download className="w-5 h-5" strokeWidth={1.5} />
-            Download Transcript Only
-          </button>
-        </div>
+      <div className="flex gap-4 justify-center">
+        <button
+          onClick={onBackToHistory}
+          className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2"
+        >
+          <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
+          Back to All Calls
+        </button>
       </div>
     </>
   );

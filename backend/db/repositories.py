@@ -97,6 +97,16 @@ class CallLogsRepository(BaseRepository):
     def __init__(self):
         super().__init__("call_logs")
 
+    async def get_by_bill(self, bill_id: str) -> list:
+        cursor = self.collection.find(
+            {"bill_id": bill_id},
+            {"transcript": 0, "ai_responses": 0},
+        ).sort("created_at", -1)
+        docs = await cursor.to_list(length=100)
+        for doc in docs:
+            doc["_id"] = str(doc["_id"])
+        return docs
+
     async def append_transcript(self, call_id: str, entry: dict):
         await self.collection.update_one(
             {"_id": ObjectId(call_id)},
