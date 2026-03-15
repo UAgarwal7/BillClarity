@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Hospital Statement</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            margin: 0;
+            padding: 40px 50px;
+            color: #333;
+            background: #fff;
+        }
+
+        .provider-name {
+            font-size: 28px;
+            font-weight: 700;
+            color: #4a6fa5;
+            margin-bottom: 4px;
+        }
+
+        .provider-address {
+            font-size: 11px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .divider {
+            border: none;
+            border-top: 2px solid #4a6fa5;
+            margin: 20px 0 40px 0;
+        }
+
+        .statement-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 30px;
+        }
+
+        .statement-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .statement-date {
+            font-size: 13px;
+            color: #555;
+        }
+
+        .info-boxes {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        .info-box {
+            border: 1px solid #ddd;
+            padding: 12px 16px;
+            min-height: 50px;
+        }
+
+        .info-box-label {
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .info-box-content {
+            font-size: 11px;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-bottom: 30px;
+        }
+
+        thead th {
+            text-align: left;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: #555;
+            padding: 10px 8px;
+            border-bottom: 1px solid #999;
+        }
+
+        thead th.num {
+            text-align: right;
+        }
+
+        tbody td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #eee;
+            color: #333;
+        }
+
+        tbody td.num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .total-row {
+            text-align: right;
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 2px solid #333;
+        }
+
+        .total-label {
+            font-size: 13px;
+            font-weight: 700;
+            display: inline;
+            margin-right: 30px;
+        }
+
+        .total-amount {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .footer {
+            margin-top: 80px;
+            text-align: center;
+        }
+
+        .footer-managed {
+            font-size: 9px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #4a6fa5;
+            margin-bottom: 6px;
+        }
+
+        .footer-urgent {
+            font-size: 12px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        @media print {
+            body {
+                padding: 20px 30px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="provider-name">MainCare Urgent Care & Clinic</div>
+    <div class="provider-address">
+        1250 Medical Plaza Drive, Suite 200, Springfield, IL 62701<br>
+        (217) 555-0147 | billing@maincareuc.com
+    </div>
+
+    <hr class="divider">
+
+    <div class="statement-header">
+        <div class="statement-title">HOSPITAL STATEMENT</div>
+        <div class="statement-date">Statement Date: Jan 25, 2025</div>
+    </div>
+
+    <div class="info-boxes">
+        <div class="info-box">
+            <div class="info-box-label">Patient Information</div>
+            <div class="info-box-content">
+                John Michael Thompson<br>
+                DOB: 04/12/1985<br>
+                Acct #: 1847562
+            </div>
+        </div>
+        <div class="info-box">
+            <div class="info-box-label">Insurance Info</div>
+            <div class="info-box-content">
+                Blue Cross Blue Shield<br>
+                Policy: BCB-9920174<br>
+                Group: 44210-A
+            </div>
+        </div>
+        <div class="info-box">
+            <div class="info-box-label">Visit Summary</div>
+            <div class="info-box-content">
+                Urgent Care Visit<br>
+                Date: 01/15/2025<br>
+                Complaint: Sore throat, fever
+            </div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Code</th>
+                <th class="num">Billed</th>
+                <th class="num">Allowed</th>
+                <th class="num">Ins Paid</th>
+                <th class="num">You Owe</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>01/15/25</td>
+                <td>Office Visit - Estab Patient, Low Complexity</td>
+                <td>99213</td>
+                <td class="num">$125.00</td>
+                <td class="num">$95.00</td>
+                <td class="num">$76.00</td>
+                <td class="num">$19.00</td>
+            </tr>
+            <tr>
+                <td>01/15/25</td>
+                <td>Office Visit - Estab Patient, Low Complexity</td>
+                <td>99213</td>
+                <td class="num">$125.00</td>
+                <td class="num">$95.00</td>
+                <td class="num">$76.00</td>
+                <td class="num">$19.00</td>
+            </tr>
+            <tr>
+                <td>01/15/25</td>
+                <td>Rapid Strep Test</td>
+                <td>87880</td>
+                <td class="num">$45.00</td>
+                <td class="num">$32.00</td>
+                <td class="num">$25.60</td>
+                <td class="num">$6.40</td>
+            </tr>
+            <tr>
+                <td>01/15/25</td>
+                <td>Throat Culture</td>
+                <td>87081</td>
+                <td class="num">$35.00</td>
+                <td class="num">$28.00</td>
+                <td class="num">$22.40</td>
+                <td class="num">$5.60</td>
+            </tr>
+            <tr>
+                <td>01/15/25</td>
+                <td>Treprostinil administered via Injection</td>
+                <td>J3285</td>
+                <td class="num">$22.50</td>
+                <td class="num">$15.00</td>
+                <td class="num">$12.00</td>
+                <td class="num">$3.00</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="total-row">
+        <span class="total-label">AMOUNT YOU OWE:</span>
+        <span class="total-amount">$53.00</span>
+    </div>
+
+    <div class="footer">
+        <div class="footer-managed">Managed by BillClarity Appeals Engine Core v1.0.2</div>
+        <div class="footer-urgent">PAYMENT DUE BY FEBRUARY 15, 2025</div>
+    </div>
+</body>
+
+</html>

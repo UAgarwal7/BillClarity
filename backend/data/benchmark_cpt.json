@@ -1,4 +1,9 @@
 {
+  "99211": { "description": "Office Visit Level 1 - Established Patient", "medicare_rate": 23.00, "typical_low": 40, "typical_median": 75, "typical_high": 130 },
+  "99212": { "description": "Office Visit Level 2 - Established Patient", "medicare_rate": 57.00, "typical_low": 70, "typical_median": 110, "typical_high": 180 },
+  "99213": { "description": "Office Visit Level 3 - Established Patient", "medicare_rate": 92.00, "typical_low": 100, "typical_median": 160, "typical_high": 250 },
+  "99214": { "description": "Office Visit Level 4 - Established Patient", "medicare_rate": 131.00, "typical_low": 150, "typical_median": 230, "typical_high": 350 },
+  "99215": { "description": "Office Visit Level 5 - Established Patient", "medicare_rate": 176.00, "typical_low": 200, "typical_median": 310, "typical_high": 450 },
   "99281": { "description": "ER Visit Level 1", "medicare_rate": 73.00, "typical_low": 150, "typical_median": 300, "typical_high": 600 },
   "99282": { "description": "ER Visit Level 2", "medicare_rate": 143.00, "typical_low": 200, "typical_median": 450, "typical_high": 900 },
   "99283": { "description": "ER Visit Level 3", "medicare_rate": 214.00, "typical_low": 300, "typical_median": 550, "typical_high": 1100 },
@@ -7,5 +12,21 @@
   "74177": { "description": "CT Abdomen/Pelvis w/ Contrast", "medicare_rate": 269.00, "typical_low": 500, "typical_median": 1200, "typical_high": 2500 },
   "85025": { "description": "CBC with Differential", "medicare_rate": 10.59, "typical_low": 30, "typical_median": 80, "typical_high": 200 },
   "80053": { "description": "Comprehensive Metabolic Panel", "medicare_rate": 14.49, "typical_low": 35, "typical_median": 90, "typical_high": 250 },
-  "96360": { "description": "IV Infusion First Hour", "medicare_rate": 103.00, "typical_low": 150, "typical_median": 350, "typical_high": 700 }
+  "96360": { "description": "IV Infusion First Hour", "medicare_rate": 103.00, "typical_low": 150, "typical_median": 350, "typical_high": 700 },
+  "87880": { "description": "Rapid Strep Test (Antigen)", "medicare_rate": 17.39, "typical_low": 25, "typical_median": 50, "typical_high": 100 },
+  "87081": { "description": "Bacterial Culture Screen", "medicare_rate": 9.44, "typical_low": 20, "typical_median": 40, "typical_high": 80 },
+  "87070": { "description": "Bacterial Culture, Aerobic", "medicare_rate": 12.15, "typical_low": 25, "typical_median": 55, "typical_high": 100 },
+  "36415": { "description": "Venipuncture (Blood Draw)", "medicare_rate": 3.00, "typical_low": 5, "typical_median": 15, "typical_high": 40 },
+  "99201": { "description": "Office Visit Level 1 - New Patient", "medicare_rate": 45.00, "typical_low": 60, "typical_median": 100, "typical_high": 180 },
+  "99202": { "description": "Office Visit Level 2 - New Patient", "medicare_rate": 75.00, "typical_low": 90, "typical_median": 150, "typical_high": 250 },
+  "99203": { "description": "Office Visit Level 3 - New Patient", "medicare_rate": 112.00, "typical_low": 130, "typical_median": 200, "typical_high": 320 },
+  "99204": { "description": "Office Visit Level 4 - New Patient", "medicare_rate": 167.00, "typical_low": 190, "typical_median": 290, "typical_high": 430 },
+  "99205": { "description": "Office Visit Level 5 - New Patient", "medicare_rate": 211.00, "typical_low": 240, "typical_median": 370, "typical_high": 530 },
+  "71046": { "description": "Chest X-ray, 2 Views", "medicare_rate": 28.00, "typical_low": 50, "typical_median": 120, "typical_high": 300 },
+  "93000": { "description": "Electrocardiogram (ECG/EKG)", "medicare_rate": 17.00, "typical_low": 30, "typical_median": 75, "typical_high": 200 },
+  "81001": { "description": "Urinalysis with Microscopy", "medicare_rate": 4.42, "typical_low": 10, "typical_median": 30, "typical_high": 70 },
+  "80061": { "description": "Lipid Panel", "medicare_rate": 18.41, "typical_low": 30, "typical_median": 75, "typical_high": 200 },
+  "84443": { "description": "Thyroid Stimulating Hormone (TSH)", "medicare_rate": 23.05, "typical_low": 35, "typical_median": 80, "typical_high": 200 },
+  "90715": { "description": "Tdap Vaccine Administration", "medicare_rate": 27.00, "typical_low": 35, "typical_median": 70, "typical_high": 130 },
+  "90471": { "description": "Immunization Admin - First Vaccine", "medicare_rate": 17.00, "typical_low": 20, "typical_median": 40, "typical_high": 75 }
 }

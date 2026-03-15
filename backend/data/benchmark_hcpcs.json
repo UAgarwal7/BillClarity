@@ -1,4 +1,12 @@
 {
   "J0131": { "description": "Acetaminophen Injection", "medicare_rate": 0.25, "typical_low": 1, "typical_median": 3, "typical_high": 8 },
-  "A4217": { "description": "Sterile Saline 1000mL", "medicare_rate": 1.50, "typical_low": 3, "typical_median": 7, "typical_high": 15 }
+  "J3285": { "description": "Treprostinil Injection", "medicare_rate": 74.00, "typical_low": 80, "typical_median": 150, "typical_high": 300 },
+  "J3490": { "description": "Unclassified Drug", "medicare_rate": 0.00, "typical_low": 5, "typical_median": 25, "typical_high": 100 },
+  "J2001": { "description": "Lidocaine Injection 10mg", "medicare_rate": 0.15, "typical_low": 1, "typical_median": 5, "typical_high": 15 },
+  "J1885": { "description": "Ketorolac (Toradol) Injection 15mg", "medicare_rate": 0.40, "typical_low": 2, "typical_median": 8, "typical_high": 25 },
+  "J1170": { "description": "Hydromorphone Injection 4mg", "medicare_rate": 0.65, "typical_low": 3, "typical_median": 10, "typical_high": 30 },
+  "J2175": { "description": "Meperidine (Demerol) Injection 100mg", "medicare_rate": 1.50, "typical_low": 5, "typical_median": 15, "typical_high": 40 },
+  "J2270": { "description": "Morphine Sulfate Injection 10mg", "medicare_rate": 0.30, "typical_low": 2, "typical_median": 8, "typical_high": 20 },
+  "A4217": { "description": "Sterile Saline 1000mL", "medicare_rate": 1.50, "typical_low": 3, "typical_median": 7, "typical_high": 15 },
+  "A4216": { "description": "Sterile Saline 500mL", "medicare_rate": 1.00, "typical_low": 2, "typical_median": 5, "typical_high": 12 }
 }

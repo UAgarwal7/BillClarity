@@ -34,7 +34,7 @@ export function AppLayout() {
             </button>
             <Link to="/" className="flex items-center gap-2">
               <FileText className="w-6 h-6 text-primary" />
-              <span className="font-medium">BillClarity Appeals Engine</span>
+              <span className="font-medium">Bill<span className="text-primary">Clarity</span></span>
             </Link>
           </div>
           <div className="flex items-center gap-4">

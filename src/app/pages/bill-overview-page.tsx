@@ -34,11 +34,36 @@ export function BillOverviewPage() {
     );
   }
 
+  const isProcessing =
+    bill?.parsing_status === "pending" || bill?.parsing_status === "processing";
+
+  if (isProcessing) {
+    return (
+      <div className="max-w-6xl mx-auto p-6 lg:p-12">
+        <div className="flex flex-col items-center justify-center py-32 text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-primary mb-6" />
+          <h1 className="text-2xl mb-3">Analyzing Your Bill</h1>
+          <p className="text-muted-foreground max-w-md leading-relaxed mb-8">
+            We're extracting line items, detecting errors, benchmarking charges, and checking insurance rules. This usually takes 30–60 seconds.
+          </p>
+          <div className="space-y-3 w-full max-w-sm">
+            <ProcessingStep label="Extracting text & tables" status="active" />
+            <ProcessingStep label="Identifying line items & codes" status="pending" />
+            <ProcessingStep label="Benchmarking against fair prices" status="pending" />
+            <ProcessingStep label="Detecting billing errors" status="pending" />
+            <ProcessingStep label="Checking insurance coverage" status="pending" />
+          </div>
+          <p className="text-xs text-muted-foreground mt-8">
+            This page will update automatically when processing completes.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const totalBilled = bill?.total_billed ?? 0;
   const insurancePaid = bill?.total_insurance_paid ?? 0;
   const patientResponsibility = bill?.patient_balance ?? 0;
-  const isProcessing =
-    bill?.parsing_status === "pending" || bill?.parsing_status === "processing";
 
   return (
     <div className="max-w-6xl mx-auto p-6 lg:p-12">
@@ -56,15 +81,6 @@ export function BillOverviewPage() {
           </p>
         )}
       </div>
-
-      {isProcessing && (
-        <div className="mb-6 p-4 border border-border rounded-lg bg-secondary/30 flex items-center gap-3">
-          <Loader2 className="w-4 h-4 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">
-            AWS is still processing your documents. Data will update automatically.
-          </span>
-        </div>
-      )}
 
       {bill?.plain_language_summary && (
         <div className="mb-8 p-6 border border-border rounded-lg bg-card">
@@ -172,6 +188,21 @@ export function BillOverviewPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProcessingStep({ label, status }: { label: string; status: "active" | "pending" }) {
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      {status === "active" ? (
+        <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+      ) : (
+        <div className="w-4 h-4 rounded-full border border-border shrink-0" />
+      )}
+      <span className={status === "active" ? "text-foreground" : "text-muted-foreground"}>
+        {label}
+      </span>
     </div>
   );
 }

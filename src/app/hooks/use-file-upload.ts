@@ -37,6 +37,7 @@ export function useFileUpload() {
 
       xhr.onload = () => {
         setUploading(false);
+        console.log("[Upload] Response status:", xhr.status, "body:", xhr.responseText.slice(0, 500));
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const responseData = JSON.parse(xhr.responseText);
@@ -46,24 +47,38 @@ export function useFileUpload() {
             });
             resolve();
           } catch (e) {
-            setError("Failed to parse response");
+            setError("Failed to parse response: " + xhr.responseText.slice(0, 200));
             reject(e);
           }
         } else {
+          let errMsg = `Upload failed (HTTP ${xhr.status})`;
           try {
             const errData = JSON.parse(xhr.responseText);
-            setError(errData.detail || `Upload failed (${xhr.status})`);
-          } catch (e) {
-            setError(`Upload failed with status ${xhr.status}`);
+            const detail = errData.detail;
+            if (typeof detail === "string") {
+              errMsg = detail;
+            } else if (detail?.message) {
+              errMsg = detail.message;
+            } else if (detail?.error) {
+              errMsg = `${detail.error}: ${detail.message || ""}`;
+            } else {
+              errMsg = JSON.stringify(detail);
+            }
+          } catch {
+            errMsg += " — " + xhr.responseText.slice(0, 200);
           }
-          reject(new Error(xhr.statusText));
+          console.error("[Upload] Error:", errMsg);
+          setError(errMsg);
+          reject(new Error(errMsg));
         }
       };
 
       xhr.onerror = () => {
         setUploading(false);
-        setError("Network error occurred during upload");
-        reject(new Error("Network error"));
+        const msg = "Network error — could not reach server. Check that the backend is running.";
+        console.error("[Upload]", msg);
+        setError(msg);
+        reject(new Error(msg));
       };
 
       const formData = new FormData();

@@ -86,11 +86,21 @@ export function AppealPacketPage() {
 
   const handleGenerate = () => generate(DEFAULT_SECTIONS);
 
-  if (initialLoading) {
+  if (initialLoading || generating) {
     return (
-      <div className="max-w-6xl mx-auto p-6 lg:p-12 flex items-center gap-3">
-        <Loader2 className="w-5 h-5 animate-spin" />
-        <span className="text-muted-foreground">Loading appeal packet...</span>
+      <div className="max-w-6xl mx-auto p-6 lg:p-12">
+        <div className="mb-8">
+          <h1 className="text-3xl mb-2">Appeal Packet</h1>
+          <p className="text-muted-foreground">
+            Generated documents to support your medical bill dispute or negotiation.
+          </p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-muted-foreground">
+            {initialLoading ? "Loading appeal packet..." : "Generating your appeal packet — this may take a moment..."}
+          </p>
+        </div>
       </div>
     );
   }
@@ -110,28 +120,8 @@ export function AppealPacketPage() {
         </div>
       )}
 
-      {!packet && !generating && (
-        <div className="mb-12 p-8 border-2 border-dashed border-border rounded-lg text-center">
-          <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" strokeWidth={1.5} />
-          <h2 className="text-xl mb-3">Generate Your Appeal Packet</h2>
-          <p className="text-muted-foreground mb-6 max-w-xl mx-auto">
-            We'll create a personalized appeal letter, bill analysis report, and negotiation script
-            based on your specific bill.
-          </p>
-          <button
-            onClick={handleGenerate}
-            className="px-8 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Generate Packet
-          </button>
-        </div>
-      )}
-
-      {generating && (
-        <div className="mb-12 p-8 border border-border rounded-lg flex items-center justify-center gap-3">
-          <Loader2 className="w-5 h-5 animate-spin text-primary" />
-          <span className="text-muted-foreground">Generating your appeal packet…</span>
-        </div>
+      {!packet && (
+        <p className="text-muted-foreground">No appeal packet available yet.</p>
       )}
 
       {packet && (
