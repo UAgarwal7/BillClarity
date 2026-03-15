@@ -34,6 +34,14 @@ export function useCallSession(billId: string | null) {
   const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingAutoEndRef = useRef(false);
 
+  // Refs that mirror state — readable synchronously inside recognition callbacks
+  // (React state updates are async, stale in callbacks = flickering mic bug)
+  const waitingForAiRef = useRef(false);
+  const aiSpeakingRef = useRef(false);
+
+  // Ref to always call the latest startListening, not a stale closure
+  const startListeningRef = useRef<() => void>(() => {});
+
   const log = useCallback((type: DebugLogEntry["type"], message: string) => {
     const entry: DebugLogEntry = {
       time: new Date().toLocaleTimeString("en-US", { hour12: false, fractionalSecondDigits: 1 }),
@@ -43,38 +51,50 @@ export function useCallSession(billId: string | null) {
     setDebugLog((prev) => [...prev, entry]);
   }, []);
 
+  /* ─── Synced setters (state + ref together) ─── */
+
+  const setWaitingForAiSync = useCallback((val: boolean) => {
+    waitingForAiRef.current = val;
+    setWaitingForAi(val);
+  }, []);
+
+  const setAiSpeakingSync = useCallback((val: boolean) => {
+    aiSpeakingRef.current = val;
+    setAiSpeaking(val);
+  }, []);
+
   /* ─── Audio playback ─── */
 
   const playAudio = useCallback((base64Audio: string): Promise<void> => {
     return new Promise((resolve) => {
       const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
       audioRef.current = audio;
-      setAiSpeaking(true);
+      setAiSpeakingSync(true);
       audio.onended = () => {
-        setAiSpeaking(false);
+        setAiSpeakingSync(false);
         audioRef.current = null;
         resolve();
       };
       audio.onerror = () => {
-        setAiSpeaking(false);
+        setAiSpeakingSync(false);
         audioRef.current = null;
         resolve();
       };
       audio.play().catch(() => {
-        setAiSpeaking(false);
+        setAiSpeakingSync(false);
         audioRef.current = null;
         resolve();
       });
     });
-  }, []);
+  }, [setAiSpeakingSync]);
 
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
-      setAiSpeaking(false);
+      setAiSpeakingSync(false);
     }
-  }, []);
+  }, [setAiSpeakingSync]);
 
   /* ─── Streaming text reveal ─── */
 
@@ -109,6 +129,11 @@ export function useCallSession(billId: string | null) {
   /* ─── Speech recognition (continuous + silence debounce) ─── */
 
   const startListening = useCallback(() => {
+    // Don't start if we shouldn't be listening, are waiting for AI, or AI is speaking
+    if (!shouldListenRef.current || waitingForAiRef.current || aiSpeakingRef.current) {
+      return;
+    }
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       log("error", "Web Speech API not supported in this browser");
@@ -145,6 +170,9 @@ export function useCallSession(billId: string | null) {
         { role: "representative", text, timestamp: new Date().toISOString() },
       ]);
       setListening(false);
+
+      // Set the ref BEFORE stopping recognition so onend sees it immediately
+      waitingForAiRef.current = true;
       setWaitingForAi(true);
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -158,7 +186,7 @@ export function useCallSession(billId: string | null) {
     };
 
     recognition.onstart = () => {
-      log("audio", "Microphone listening (continuous)…");
+      log("audio", "Microphone listening…");
       setListening(true);
     };
 
@@ -186,25 +214,47 @@ export function useCallSession(billId: string | null) {
       if (event.error !== "aborted" && event.error !== "no-speech") {
         log("error", `Speech recognition error: ${event.error}`);
       }
-      setListening(false);
-      if (shouldListenRef.current && event.error === "no-speech") {
+
+      // Only restart on no-speech, and only if all conditions allow it
+      const willRestart =
+        event.error === "no-speech" &&
+        shouldListenRef.current &&
+        !waitingForAiRef.current &&
+        !aiSpeakingRef.current;
+
+      if (willRestart) {
+        // Don't toggle listening off — we're about to restart, avoids mic flicker
         setTimeout(() => {
-          if (shouldListenRef.current) startListening();
-        }, 200);
+          startListeningRef.current();
+        }, 300);
+      } else {
+        setListening(false);
       }
     };
 
     recognition.onend = () => {
-      setListening(false);
-      if (shouldListenRef.current && !waitingForAi) {
+      // Only restart if: we should be listening, not waiting for AI, AI not speaking
+      const willRestart =
+        shouldListenRef.current &&
+        !waitingForAiRef.current &&
+        !aiSpeakingRef.current;
+
+      if (willRestart) {
+        // Don't toggle listening off — we're about to restart, avoids mic flicker
         setTimeout(() => {
-          if (shouldListenRef.current) startListening();
+          startListeningRef.current();
         }, 200);
+      } else {
+        setListening(false);
       }
     };
 
     recognition.start();
-  }, [log, waitingForAi]);
+  // No dependency on waitingForAi/aiSpeaking state — we use refs instead
+  }, [log]);
+
+  // Keep the ref current so onend/onerror always call the latest version
+  startListeningRef.current = startListening;
 
   const stopListening = useCallback(() => {
     shouldListenRef.current = false;
@@ -268,6 +318,8 @@ export function useCallSession(billId: string | null) {
     setDebugLog([]);
     setCallEnded(false);
     pendingAutoEndRef.current = false;
+    waitingForAiRef.current = false;
+    aiSpeakingRef.current = false;
 
     try {
       setLoadingStep("Generating negotiation strategy…");
@@ -325,7 +377,7 @@ export function useCallSession(billId: string | null) {
           if (msg.type === "ai_response" && msg.response) {
             const responseText = msg.response as string;
             setAiResponse(responseText);
-            setWaitingForAi(false);
+            setWaitingForAiSync(false);
 
             setTranscript((prev) => {
               const newEntry: TranscriptEntry = {
@@ -358,15 +410,15 @@ export function useCallSession(billId: string | null) {
             }
 
             if (shouldListenRef.current) {
-              startListening();
+              startListeningRef.current();
             }
           } else if (msg.type === "transcript_saved") {
             // patient transcript saved — no action needed
           } else if (msg.error) {
             log("error", `Server: ${msg.error} — ${msg.message}`);
-            setWaitingForAi(false);
+            setWaitingForAiSync(false);
             if (shouldListenRef.current) {
-              startListening();
+              startListeningRef.current();
             }
           }
         } catch {
@@ -376,12 +428,11 @@ export function useCallSession(billId: string | null) {
 
       if (data.opening_audio_base64) {
         log("audio", "Playing opening statement…");
-        setAiSpeaking(true);
         await playAudio(data.opening_audio_base64);
       }
 
       shouldListenRef.current = true;
-      startListening();
+      startListeningRef.current();
 
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -396,6 +447,8 @@ export function useCallSession(billId: string | null) {
   const reset = () => {
     shouldListenRef.current = false;
     pendingAutoEndRef.current = false;
+    waitingForAiRef.current = false;
+    aiSpeakingRef.current = false;
     stopListening();
     stopAudio();
     if (streamIntervalRef.current) {
@@ -414,8 +467,8 @@ export function useCallSession(billId: string | null) {
     setLoadingStep(null);
     setDebugLog([]);
     setListening(false);
-    setAiSpeaking(false);
-    setWaitingForAi(false);
+    setAiSpeakingSync(false);
+    setWaitingForAiSync(false);
     setCallEnded(false);
   };
 

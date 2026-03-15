@@ -26,11 +26,21 @@ def _build_bill_context(bill_metadata: dict) -> dict:
 
 
 def _build_prior_calls_summary(past_calls: list) -> str:
-    """Build a summary string from prior call logs for this bill."""
-    if not past_calls:
+    """Build a summary string from prior call logs for this bill.
+
+    Only includes completed calls (those with a real outcome and summary)
+    to avoid polluting context with abandoned/incomplete sessions.
+    """
+    completed = [
+        c for c in past_calls
+        if c.get("negotiation_outcome") and c.get("summary")
+    ]
+    if not completed:
         return "No prior calls for this bill."
+    # Limit to last 3 completed calls to prevent prompt bloat
+    completed = completed[:3]
     lines = []
-    for i, c in enumerate(past_calls, 1):
+    for i, c in enumerate(completed, 1):
         outcome = c.get("negotiation_outcome", "unknown")
         summary = c.get("summary", "No summary")
         next_steps = c.get("next_steps", "")
@@ -169,10 +179,24 @@ async def process_transcript(
             bill_context=bill_context,
             prior_calls_summary=prior_calls_summary,
         )
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[CALL] Gemini call response FAILED for call {call_id}: {e}")
+        traceback.print_exc()
+
+        # Dynamic fallback that references what the rep actually said
+        # so it doesn't repeat the same static line every time
+        fallback_text = f"I appreciate you explaining that. Could you tell me more about how that charge was determined?"
+        if "correct" in text.lower() or "accurate" in text.lower():
+            fallback_text = "I understand you're saying the charge is correct. Could you walk me through exactly how that amount was calculated?"
+        elif "sure" in text.lower() or "continue" in text.lower() or "go ahead" in text.lower():
+            fallback_text = "Great, so looking at my bill, could you help me understand the largest charge on here?"
+        elif "?" in text:
+            fallback_text = "That's a good question. Let me think about that for a moment. Could you also pull up the itemized charges for me?"
+
         result = {
-            "response": "I'd like to continue discussing the specific charges on my bill. Could you help me review them one by one?",
-            "strategic_note": "Gemini returned malformed response — using safe fallback.",
+            "response": fallback_text,
+            "strategic_note": f"Gemini failed: {str(e)[:200]} — using contextual fallback.",
             "escalate": False,
             "end_call": False,
         }

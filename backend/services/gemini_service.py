@@ -27,7 +27,7 @@ call_model = genai.GenerativeModel(
     model_name="gemini-2.5-flash",
     generation_config={
         "temperature": 0.3,
-        "max_output_tokens": 1024,
+        "max_output_tokens": 2048,
     },
 )
 
@@ -55,10 +55,39 @@ def json_dumps(obj, indent=None) -> str:
 
 
 def parse_gemini_json(text: str) -> dict | list:
-    """Strip markdown code fences and parse JSON from Gemini output."""
+    """Strip markdown code fences and parse JSON from Gemini output.
+
+    Includes repair logic for truncated JSON (e.g. from max_output_tokens cutoff).
+    """
     cleaned = re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
     cleaned = re.sub(r"\n?```\s*$", "", cleaned)
-    return json.loads(cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        # Try to repair truncated JSON by closing open strings/braces
+        repaired = cleaned
+        # Close any unterminated string
+        if repaired.count('"') % 2 != 0:
+            repaired += '"'
+        # Close any open braces/brackets
+        open_braces = repaired.count("{") - repaired.count("}")
+        open_brackets = repaired.count("[") - repaired.count("]")
+        repaired += "}" * max(0, open_braces)
+        repaired += "]" * max(0, open_brackets)
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            pass
+        # Last resort: try to extract the response field with regex
+        match = re.search(r'"response"\s*:\s*"((?:[^"\\]|\\.)*)', cleaned)
+        if match:
+            return {
+                "response": match.group(1),
+                "strategic_note": "Extracted from truncated Gemini output",
+                "escalate": False,
+                "end_call": False,
+            }
+        raise
 
 
 async def call_gemini(prompt: str, use_model=None, retries: int = 2) -> str:
@@ -189,16 +218,25 @@ def _format_transcript_for_prompt(transcript: list, max_exchanges: int = 10) -> 
     recent = transcript[-(max_exchanges * 2):]
 
     topics = set()
+    patient_said = []
     for t in earlier:
         text_lower = t.get("text", "").lower()
+        role = t.get("role", "")
         for keyword in ["duplicate", "overcharg", "cpt", "code", "saline", "ct scan",
                         "adjusted", "removed", "reduce", "discount", "balance", "charge"]:
             if keyword in text_lower:
                 topics.add(keyword)
+        # Track what the patient already said to prevent repetition
+        if role in ("patient", "agent"):
+            patient_said.append(t.get("text", "")[:80])
 
     topics_summary = ""
+    parts = []
     if topics:
-        topics_summary = f"Topics already discussed earlier in the call: {', '.join(sorted(topics))}. Do NOT bring these up again unless the rep re-opens them."
+        parts.append(f"Topics already discussed earlier in the call: {', '.join(sorted(topics))}. Do NOT bring these up again unless the rep re-opens them.")
+    if patient_said:
+        parts.append(f"You (patient) already said these things earlier — do NOT repeat them: {' | '.join(patient_said[-5:])}")
+    topics_summary = "\n".join(parts)
 
     lines = []
     for t in recent:
@@ -232,4 +270,8 @@ async def generate_call_response(
         topics_already_covered=topics_covered,
     )
     result = await call_gemini(prompt, use_model=call_model)
-    return parse_gemini_json(result)
+    try:
+        return parse_gemini_json(result)
+    except Exception as e:
+        print(f"[CALL] Gemini returned unparseable response: {result[:500]}")
+        raise ValueError(f"Failed to parse Gemini call response: {e}") from e
