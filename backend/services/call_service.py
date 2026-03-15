@@ -3,6 +3,7 @@
 import json
 from datetime import datetime, timezone
 from services.gemini_service import generate_call_response, call_gemini, parse_gemini_json
+from services.elevenlabs_service import text_to_speech_base64
 from db.repositories import call_logs_repo, bills_repo, line_items_repo, benchmark_results_repo
 
 
@@ -62,11 +63,15 @@ Output as JSON:
         "next_steps": None,
     })
 
+    # Synthesize opening script to speech
+    opening_audio = await text_to_speech_base64(opening_script)
+
     return {
         "call_id": call_id,
         "strategy": strategy,
         "opening_script": opening_script,
         "key_points": key_points,
+        "opening_audio_base64": opening_audio,
     }
 
 
@@ -112,6 +117,11 @@ async def process_transcript(
         {"_id": call_log["_id"]} if "_id" in call_log else {},
         {"$push": {"ai_responses": ai_entry}},
     )
+
+    # Synthesize AI response to speech
+    response_text = result.get("response", "")
+    audio_base64 = await text_to_speech_base64(response_text) if response_text else None
+    result["audio_base64"] = audio_base64
 
     return result
 

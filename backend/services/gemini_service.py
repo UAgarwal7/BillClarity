@@ -13,7 +13,7 @@ genai.configure(api_key=settings.gemini_api_key)
 
 # Standard model for most tasks
 model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
+    model_name="gemini-2.5-flash",
     generation_config={
         "temperature": 0.2,
         "top_p": 0.95,
@@ -23,7 +23,7 @@ model = genai.GenerativeModel(
 
 # Fast model for real-time call responses
 call_model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
+    model_name="gemini-2.5-flash",
     generation_config={
         "temperature": 0.3,
         "max_output_tokens": 1024,

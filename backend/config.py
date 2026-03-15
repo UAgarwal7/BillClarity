@@ -31,8 +31,9 @@ class Settings(BaseSettings):
     # MongoDB
     mongodb_uri: str = "mongodb://localhost:27017"
 
-    # ElevenLabs (stretch)
+    # ElevenLabs
     elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # "Rachel" voice
 
     # n8n (stretch)
     n8n_base_url: str = "http://localhost:5678"

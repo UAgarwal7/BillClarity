@@ -1,10 +1,12 @@
 # Calls Router — /api/calls/*
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional
 
 from services.call_service import start_call_session, process_transcript, end_call_session
+from services.elevenlabs_service import text_to_speech, text_to_speech_base64
 from db.repositories import call_logs_repo, bills_repo, line_items_repo, benchmark_results_repo
 
 router = APIRouter()
@@ -91,6 +93,7 @@ async def call_stream(websocket: WebSocket, call_id: str):
                 "response": result.get("response", ""),
                 "strategic_note": result.get("strategic_note", ""),
                 "escalate": result.get("escalate", False),
+                "audio_base64": result.get("audio_base64"),
             })
     except WebSocketDisconnect:
         pass
@@ -123,3 +126,24 @@ async def get_call_log(call_id: str):
             "error": "CALL_NOT_FOUND", "message": f"Call {call_id} not found."
         })
     return call_log
+
+
+class TTSRequest(BaseModel):
+    text: str
+
+
+@router.post("/tts")
+async def synthesize_speech(request: TTSRequest):
+    """On-demand text-to-speech. Returns MP3 audio."""
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text is required.")
+
+    audio_bytes = await text_to_speech(request.text)
+    if audio_bytes is None:
+        raise HTTPException(status_code=502, detail="TTS synthesis failed. Check ElevenLabs API key.")
+
+    return Response(
+        content=audio_bytes,
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": 'inline; filename="tts_output.mp3"'},
+    )
