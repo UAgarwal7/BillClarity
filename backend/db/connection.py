@@ -15,7 +15,7 @@ async def connect_db():
     client = AsyncIOMotorClient(
         settings.mongodb_uri,
         serverSelectionTimeoutMS=5000,
-        tlsCAFile=certifi.where()
+        tlsAllowInvalidCertificates=True
     )
     db = client["billclarity"]
 
