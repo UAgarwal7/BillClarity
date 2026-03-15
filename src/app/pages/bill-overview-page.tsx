@@ -49,7 +49,7 @@ export function BillOverviewPage() {
         {bill && (
           <p className="text-xs text-muted-foreground mt-1">
             {bill.provider ?? "Unknown provider"} · {bill.facility ?? "Unknown facility"}
-            {bill.service_date_range.start && (
+            {bill.service_date_range?.start && (
               <> · {new Date(bill.service_date_range.start).toLocaleDateString()}</>
             )}
           </p>

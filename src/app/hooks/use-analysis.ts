@@ -31,8 +31,9 @@ export function useAnalysis(billId: string | null) {
         setErrors(errData.errors as ErrorRecord[]);
         setBenchmarks(benchData.benchmarks);
         setBenchmarkSummary(benchData.summary);
-        setInsights(insData.insights as InsuranceInsight[]);
-        setAppealTriggers(insData.appeal_triggers as AppealTrigger[]);
+        const insNested = (insData.insights as unknown) as { insights: InsuranceInsight[]; appeal_triggers: AppealTrigger[] } | undefined;
+        setInsights(insNested?.insights ?? []);
+        setAppealTriggers(insNested?.appeal_triggers ?? []);
       })
       .catch((e: unknown) => {
         const msg = e instanceof Error ? e.message : "Failed to load analysis";

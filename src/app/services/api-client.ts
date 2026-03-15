@@ -34,10 +34,20 @@ async function request<T>(
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({
-      error: { code: "UNKNOWN", message: response.statusText, status: response.status },
-    }));
-    throw new ApiClientError(errorBody.error);
+    let errorBody: any;
+    try {
+      errorBody = await response.json();
+    } catch {
+      errorBody = {};
+    }
+
+    const errorData: ApiError = {
+      code: errorBody?.error?.code || errorBody?.code || "UNKNOWN",
+      message: errorBody?.error?.message || errorBody?.message || errorBody?.detail || response.statusText,
+      status: response.status,
+    };
+
+    throw new ApiClientError(errorData);
   }
 
   return response.json();

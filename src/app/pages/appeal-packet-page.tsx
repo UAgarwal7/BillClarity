@@ -1,21 +1,35 @@
-import { FileText, Download, Printer, Mail, Loader2 } from "lucide-react";
+import { FileText, AlertCircle, CheckCircle, Download, Printer, Mail, Loader2 } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useAppealPacket } from "@/app/hooks/use-appeal-packet";
 
-const DEFAULT_SECTIONS = ["appeal_letter", "bill_analysis", "negotiation_script"];
+const DEFAULT_SECTIONS = ["bill_explanation", "flagged_issues", "benchmark_analysis", "insurance_insights", "appeal_letter", "negotiation_script"];
 
 const SECTION_META: Record<string, { title: string; description: string; icon: React.ReactNode }> = {
+  bill_explanation: {
+    title: "Bill Explanation",
+    description: "Simplified breakdown of your medical bill in plain language, explaining what you were charged for.",
+    icon: <FileText className="w-6 h-6" strokeWidth={1.5} />,
+  },
+  flagged_issues: {
+    title: "Flagged Billing Issues",
+    description: "Specific discrepancies, duplicate charges, or coding errors identified in your bill.",
+    icon: <AlertCircle className="w-6 h-6" strokeWidth={1.5} />,
+  },
+  benchmark_analysis: {
+    title: "Benchmark Price Comparison",
+    description: "Comparison of your bill's prices against Medicare rates and typical market medians.",
+    icon: <FileText className="w-6 h-6" strokeWidth={1.5} />,
+  },
+  insurance_insights: {
+    title: "Insurance Insights",
+    description: "Coverage opportunities and potential appeal triggers based on insurance rules.",
+    icon: <CheckCircle className="w-6 h-6" strokeWidth={1.5} />,
+  },
   appeal_letter: {
     title: "Appeal Letter",
     description:
       "Formal letter outlining disputed charges and requesting review, including specific line items and supporting documentation references.",
     icon: <Mail className="w-6 h-6" strokeWidth={1.5} />,
-  },
-  bill_analysis: {
-    title: "Bill Analysis Report",
-    description:
-      "Detailed breakdown of all charges with benchmarking data, coding analysis, and flagged discrepancies highlighted for review.",
-    icon: <FileText className="w-6 h-6" strokeWidth={1.5} />,
   },
   negotiation_script: {
     title: "Negotiation Script",
