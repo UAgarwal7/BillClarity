@@ -67,6 +67,15 @@ async def upload_bill(
     return {"bill_id": bill_id, "status": "processing"}
 
 
+@router.get("/")
+async def list_bills():
+    """List all bills sorted by most recent first."""
+    bills = await bills_repo.find_by({})
+    from datetime import datetime
+    bills.sort(key=lambda b: b.get("created_at") or datetime.min, reverse=True)
+    return {"bills": bills}
+
+
 @router.get("/{bill_id}")
 async def get_bill(bill_id: str):
     """Get bill metadata and parsing status."""
@@ -90,6 +99,25 @@ async def get_line_items(bill_id: str):
 
     items = await line_items_repo.get_by_bill(bill_id)
     return {"line_items": items, "total_count": len(items)}
+
+
+@router.delete("/{bill_id}", status_code=204)
+async def delete_bill(bill_id: str):
+    """Delete a bill and all associated data."""
+    bill = await bills_repo.get_by_id(bill_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail={
+            "error": "BILL_NOT_FOUND", "message": f"Bill {bill_id} not found."
+        })
+    await bills_repo.delete(bill_id)
+    # Cascade delete related records
+    items = await line_items_repo.get_by_bill(bill_id)
+    for item in items:
+        await line_items_repo.delete(item["_id"])
+    from db.repositories import benchmark_results_repo
+    benchmarks = await benchmark_results_repo.get_by_bill(bill_id)
+    for b in benchmarks:
+        await benchmark_results_repo.delete(b["_id"])
 
 
 @router.post("/{bill_id}/confirm-fields")

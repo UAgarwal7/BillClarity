@@ -1,11 +1,16 @@
-import { FileText, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { FileText, AlertCircle, Loader2 } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useAnalysis } from "@/app/hooks/use-analysis";
 import type { InsuranceInsight, AppealTrigger } from "@/app/types/analysis";
 
 export function InsuranceInsightsPage() {
-  const { billId } = useBillContext();
-  const { insights, appealTriggers, loading, error } = useAnalysis(billId);
+  const { billId, bill, billLoading } = useBillContext();
+  const isProcessing =
+    bill?.parsing_status === "pending" || bill?.parsing_status === "processing";
+  const { insights, appealTriggers, loading, error } = useAnalysis(
+    billId,
+    !isProcessing && !!bill
+  );
 
   if (!billId) {
     return (
@@ -15,11 +20,21 @@ export function InsuranceInsightsPage() {
     );
   }
 
-  if (loading) {
+  if (billLoading || isProcessing) {
     return (
-      <div className="max-w-6xl mx-auto p-6 lg:p-12 flex items-center gap-3">
-        <Loader2 className="w-5 h-5 animate-spin" />
-        <span className="text-muted-foreground">Loading insights...</span>
+      <div className="max-w-6xl mx-auto p-6 lg:p-12">
+        <div className="mb-8">
+          <h1 className="text-3xl mb-2">Insurance Insights</h1>
+          <p className="text-muted-foreground">
+            Detected insurance-related issues, coverage opportunities, and potential appeal strategies.
+          </p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-muted-foreground">
+            Your bill is being processed. Insurance insights will appear here once analysis is complete.
+          </p>
+        </div>
       </div>
     );
   }
@@ -34,6 +49,15 @@ export function InsuranceInsightsPage() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto p-6 lg:p-12 flex items-center gap-3">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        <span className="text-muted-foreground">Loading insights...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-6 lg:p-12">
       <div className="mb-8">
@@ -43,7 +67,6 @@ export function InsuranceInsightsPage() {
         </p>
       </div>
 
-      {/* Insurance Insights */}
       {insights.length > 0 && (
         <div className="mb-12">
           <h2 className="text-2xl mb-6">Coverage & Policy Insights</h2>
@@ -55,7 +78,6 @@ export function InsuranceInsightsPage() {
         </div>
       )}
 
-      {/* Appeal Triggers */}
       {appealTriggers.length > 0 && (
         <div className="mb-12">
           <h2 className="text-2xl mb-6">Appeal Opportunities</h2>
@@ -68,10 +90,9 @@ export function InsuranceInsightsPage() {
       )}
 
       {insights.length === 0 && appealTriggers.length === 0 && (
-        <p className="text-muted-foreground">No insights available yet. The bill may still be processing.</p>
+        <p className="text-muted-foreground">No insights available yet.</p>
       )}
 
-      {/* Summary */}
       {(insights.length > 0 || appealTriggers.length > 0) && (
         <div className="mt-12 grid md:grid-cols-3 gap-6">
           <div className="p-6 border border-border rounded-lg bg-card text-center">

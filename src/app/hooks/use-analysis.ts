@@ -5,7 +5,7 @@ import type { ErrorRecord, InsuranceInsight, AppealTrigger } from "@/app/types/a
 import type { BenchmarkResult, BenchmarkSummary } from "@/app/types/benchmark";
 import { analysisApi } from "@/app/services/analysis-api";
 
-export function useAnalysis(billId: string | null) {
+export function useAnalysis(billId: string | null, enabled = true) {
   const [explanation, setExplanation] = useState<string | null>(null);
   const [errors, setErrors] = useState<ErrorRecord[]>([]);
   const [benchmarks, setBenchmarks] = useState<BenchmarkResult[]>([]);
@@ -16,7 +16,7 @@ export function useAnalysis(billId: string | null) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!billId) return;
+    if (!billId || !enabled) return;
     setLoading(true);
     setError(null);
 
@@ -40,7 +40,7 @@ export function useAnalysis(billId: string | null) {
         setError(msg);
       })
       .finally(() => setLoading(false));
-  }, [billId]);
+  }, [billId, enabled]);
 
   return { explanation, errors, benchmarks, benchmarkSummary, insights, appealTriggers, loading, error };
 }

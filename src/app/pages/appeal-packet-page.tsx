@@ -1,6 +1,7 @@
 import { FileText, AlertCircle, CheckCircle, Download, Printer, Mail, Loader2 } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useAppealPacket } from "@/app/hooks/use-appeal-packet";
+import { MarkdownContent } from "@/app/components/ui/markdown-content";
 
 const DEFAULT_SECTIONS = ["bill_explanation", "flagged_issues", "benchmark_analysis", "insurance_insights", "appeal_letter", "negotiation_script"];
 
@@ -120,8 +121,8 @@ export function AppealPacketPage() {
                         {meta.description}
                       </p>
                       {content && (
-                        <div className="mb-4 p-4 bg-secondary/30 rounded-md text-sm text-muted-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
-                          {content}
+                        <div className="mb-4 p-4 bg-secondary/30 rounded-md text-sm max-h-48 overflow-y-auto">
+                          <MarkdownContent>{content}</MarkdownContent>
                         </div>
                       )}
                       <div className="flex gap-3">

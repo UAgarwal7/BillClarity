@@ -1,6 +1,7 @@
 import { Loader2 } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useBill } from "@/app/hooks/use-bill";
+import { MarkdownContent } from "@/app/components/ui/markdown-content";
 
 export function BillOverviewPage() {
   const { billId } = useBillContext();
@@ -68,7 +69,7 @@ export function BillOverviewPage() {
       {bill?.plain_language_summary && (
         <div className="mb-8 p-6 border border-border rounded-lg bg-card">
           <h2 className="text-lg font-medium mb-2">Summary</h2>
-          <p className="text-muted-foreground leading-relaxed">{bill.plain_language_summary}</p>
+          <MarkdownContent>{bill.plain_language_summary}</MarkdownContent>
         </div>
       )}
 

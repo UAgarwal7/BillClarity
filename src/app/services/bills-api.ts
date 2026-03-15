@@ -5,6 +5,14 @@ import type { Bill } from "@/app/types/bill";
 import type { LineItem } from "@/app/types/line-item";
 
 export const billsApi = {
+  /** List all bills sorted by most recent first */
+  listBills: () =>
+    apiClient.get<{ bills: Bill[] }>("/api/bills/"),
+
+  /** Delete a bill and all associated data */
+  deleteBill: (billId: string) =>
+    apiClient.delete(`/api/bills/${billId}`),
+
   /** Upload bill files with optional context */
   upload: (formData: FormData) =>
     apiClient.upload<{ bill_id: string; status: string }>("/api/bills/upload", formData),

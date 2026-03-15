@@ -3,8 +3,13 @@ import { useBillContext } from "@/app/context/bill-context";
 import { useAnalysis } from "@/app/hooks/use-analysis";
 
 export function BenchmarkingPage() {
-  const { billId } = useBillContext();
-  const { benchmarks, benchmarkSummary, loading, error } = useAnalysis(billId);
+  const { billId, bill, billLoading } = useBillContext();
+  const isProcessing =
+    bill?.parsing_status === "pending" || bill?.parsing_status === "processing";
+  const { benchmarks, benchmarkSummary, loading, error } = useAnalysis(
+    billId,
+    !isProcessing && !!bill
+  );
 
   if (!billId) {
     return (
@@ -14,11 +19,21 @@ export function BenchmarkingPage() {
     );
   }
 
-  if (loading) {
+  if (billLoading || isProcessing) {
     return (
-      <div className="max-w-6xl mx-auto p-6 lg:p-12 flex items-center gap-3">
-        <Loader2 className="w-5 h-5 animate-spin" />
-        <span className="text-muted-foreground">Loading benchmarks...</span>
+      <div className="max-w-6xl mx-auto p-6 lg:p-12">
+        <div className="mb-8">
+          <h1 className="text-3xl mb-2">Cost Benchmarking</h1>
+          <p className="text-muted-foreground">
+            Comparison of your charges against typical regional and national pricing.
+          </p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-muted-foreground">
+            Your bill is being processed. Benchmarking data will appear here once analysis is complete.
+          </p>
+        </div>
       </div>
     );
   }
@@ -29,6 +44,15 @@ export function BenchmarkingPage() {
         <div className="p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-md">
           {error}
         </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto p-6 lg:p-12 flex items-center gap-3">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        <span className="text-muted-foreground">Loading benchmarks...</span>
       </div>
     );
   }

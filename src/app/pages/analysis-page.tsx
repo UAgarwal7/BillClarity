@@ -12,13 +12,34 @@ function toDisplayRisk(risk: RiskLevel): DisplayRisk {
 }
 
 export function AnalysisPage() {
-  const { billId } = useBillContext();
+  const { billId, bill, billLoading } = useBillContext();
+  const isProcessing =
+    bill?.parsing_status === "pending" || bill?.parsing_status === "processing";
   const { lineItems, loading, error } = useLineItems(billId);
 
   if (!billId) {
     return (
       <div className="max-w-6xl mx-auto p-6 lg:p-12">
         <p className="text-muted-foreground">No bill loaded. Please upload a bill first.</p>
+      </div>
+    );
+  }
+
+  if (billLoading || isProcessing) {
+    return (
+      <div className="max-w-6xl mx-auto p-6 lg:p-12">
+        <div className="mb-8">
+          <h1 className="text-3xl mb-2">Bill Analysis</h1>
+          <p className="text-muted-foreground">
+            Detailed analysis of line items with potential issues flagged for review.
+          </p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-muted-foreground">
+            Your bill is being processed. Line item analysis will appear here once complete.
+          </p>
+        </div>
       </div>
     );
   }
@@ -84,9 +105,7 @@ export function AnalysisPage() {
       <div>
         <h2 className="text-2xl mb-6">Line Items</h2>
         {lineItems.length === 0 ? (
-          <p className="text-muted-foreground">
-            No line items found. The bill may still be processing.
-          </p>
+          <p className="text-muted-foreground">No line items found.</p>
         ) : (
           <div className="space-y-4">
             {lineItems.map((item) => {
