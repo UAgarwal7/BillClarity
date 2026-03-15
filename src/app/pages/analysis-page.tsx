@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle, AlertTriangle, Loader2, PhoneCall } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useLineItems } from "@/app/hooks/use-line-items";
 import type { RiskLevel } from "@/app/types/line-item";
@@ -111,13 +111,33 @@ export function AnalysisPage() {
             {lineItems.map((item) => {
               const displayRisk = toDisplayRisk(item.risk_level);
               const flagNote = item.flags[0]?.message ?? "";
+              const cr = item.call_resolution;
+              const isResolved = cr?.status === "resolved";
+              const isAdjusted = cr?.status === "adjusted";
               return (
-                <div key={item._id} className="p-6 border border-border rounded-lg bg-card">
+                <div
+                  key={item._id}
+                  className={`p-6 border rounded-lg bg-card ${
+                    isResolved ? "border-green-500/30 opacity-60" : "border-border"
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-1">
-                        <h3>{item.description}</h3>
+                        <h3 className={isResolved ? "line-through" : ""}>{item.description}</h3>
                         <RiskBadge risk={displayRisk} />
+                        {isResolved && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-500/10 text-green-400 border border-green-500/20">
+                            <PhoneCall className="w-3 h-3" strokeWidth={2} />
+                            Resolved
+                          </span>
+                        )}
+                        {isAdjusted && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            <PhoneCall className="w-3 h-3" strokeWidth={2} />
+                            Adjusted
+                          </span>
+                        )}
                       </div>
                       {item.code && (
                         <p className="text-sm text-muted-foreground">
@@ -126,9 +146,27 @@ export function AnalysisPage() {
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-lg">${item.billed_amount.toLocaleString()}</p>
+                      {isAdjusted && cr ? (
+                        <>
+                          <p className="font-medium text-lg line-through text-muted-foreground">
+                            ${cr.previous_amount.toLocaleString()}
+                          </p>
+                          <p className="font-medium text-lg text-green-400">
+                            ${cr.new_amount.toLocaleString()}
+                          </p>
+                        </>
+                      ) : isResolved ? (
+                        <p className="font-medium text-lg line-through text-muted-foreground">
+                          ${item.billed_amount.toLocaleString()}
+                        </p>
+                      ) : (
+                        <p className="font-medium text-lg">${item.billed_amount.toLocaleString()}</p>
+                      )}
                     </div>
                   </div>
+                  {cr?.note && (
+                    <p className="text-sm text-green-400/80 leading-relaxed mb-2">{cr.note}</p>
+                  )}
                   {flagNote && (
                     <p className="text-sm text-muted-foreground leading-relaxed">{flagNote}</p>
                   )}

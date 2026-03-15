@@ -13,6 +13,14 @@ export interface LineItemFlag {
   suggested_action: string;
 }
 
+export interface CallResolution {
+  status: "resolved" | "adjusted" | "denied";
+  previous_amount: number;
+  new_amount: number;
+  note: string;
+  call_id: string;
+}
+
 export interface LineItem {
   _id: string;
   bill_id: string;
@@ -30,4 +38,5 @@ export interface LineItem {
   confidence: number;
   risk_level: RiskLevel;
   flags: LineItemFlag[];
+  call_resolution?: CallResolution;
 }

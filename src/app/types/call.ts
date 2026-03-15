@@ -6,6 +6,9 @@ export interface TranscriptEntry {
   role: "agent" | "representative" | "system";
   text: string;
   timestamp: string;
+  /** Full text for streaming reveals — text is progressively filled while streaming is true */
+  fullText?: string;
+  streaming?: boolean;
 }
 
 export interface AiResponse {

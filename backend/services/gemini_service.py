@@ -171,15 +171,65 @@ async def generate_negotiation_script(
     return await call_gemini(prompt)
 
 
+def _format_transcript_for_prompt(transcript: list, max_exchanges: int = 10) -> tuple[str, str]:
+    """Format transcript as readable text and extract topics already covered.
+
+    Returns (formatted_recent_transcript, topics_covered_summary).
+    """
+    role_labels = {"patient": "Patient", "representative": "Representative", "agent": "Patient"}
+
+    if len(transcript) <= max_exchanges * 2:
+        lines = []
+        for t in transcript:
+            label = role_labels.get(t.get("role", ""), t.get("role", "Unknown"))
+            lines.append(f"{label}: {t.get('text', '')}")
+        return "\n".join(lines), ""
+
+    earlier = transcript[:-(max_exchanges * 2)]
+    recent = transcript[-(max_exchanges * 2):]
+
+    topics = set()
+    for t in earlier:
+        text_lower = t.get("text", "").lower()
+        for keyword in ["duplicate", "overcharg", "cpt", "code", "saline", "ct scan",
+                        "adjusted", "removed", "reduce", "discount", "balance", "charge"]:
+            if keyword in text_lower:
+                topics.add(keyword)
+
+    topics_summary = ""
+    if topics:
+        topics_summary = f"Topics already discussed earlier in the call: {', '.join(sorted(topics))}. Do NOT bring these up again unless the rep re-opens them."
+
+    lines = []
+    for t in recent:
+        label = role_labels.get(t.get("role", ""), t.get("role", "Unknown"))
+        lines.append(f"{label}: {t.get('text', '')}")
+
+    return "\n".join(lines), topics_summary
+
+
 async def generate_call_response(
     strategy: str, key_points: str, transcript: list, latest_message: str,
+    bill_context: dict | None = None, prior_calls_summary: str = "",
 ) -> dict:
-    """Generate real-time call response (low latency)."""
+    """Generate real-time call response as the patient (low latency)."""
+    ctx = bill_context or {}
+
+    formatted_transcript, topics_covered = _format_transcript_for_prompt(transcript)
+
     prompt = load_prompt("generate_call_response").format(
         strategy=strategy,
         key_points=key_points,
-        transcript_array=json_dumps(transcript),
+        transcript_array=formatted_transcript,
         latest_representative_message=latest_message,
+        provider=ctx.get("provider", "the hospital"),
+        facility=ctx.get("facility", "the billing department"),
+        visit_date=ctx.get("visit_date", "my recent visit"),
+        total_billed=ctx.get("total_billed", "unknown"),
+        patient_balance=ctx.get("patient_balance", "unknown"),
+        insurance_provider=ctx.get("insurance_provider", "my insurance"),
+        prior_calls_summary=prior_calls_summary or "No prior calls for this bill.",
+        topics_already_covered=topics_covered,
     )
     result = await call_gemini(prompt, use_model=call_model)
     return parse_gemini_json(result)

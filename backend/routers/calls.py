@@ -75,6 +75,7 @@ async def call_stream(websocket: WebSocket, call_id: str):
     session_context = {
         "strategy": call_log.get("strategy", ""),
         "key_points": call_log.get("key_points", []),
+        "bill_context": call_log.get("bill_context", {}),
     }
 
     try:
@@ -99,6 +100,7 @@ async def call_stream(websocket: WebSocket, call_id: str):
                 "response": result.get("response", ""),
                 "strategic_note": result.get("strategic_note", ""),
                 "escalate": result.get("escalate", False),
+                "end_call": result.get("end_call", False),
                 "audio_base64": result.get("audio_base64"),
             })
     except WebSocketDisconnect:

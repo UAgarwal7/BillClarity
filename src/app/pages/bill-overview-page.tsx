@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2, PhoneCall } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useBill } from "@/app/hooks/use-bill";
 import { MarkdownContent } from "@/app/components/ui/markdown-content";
@@ -73,11 +73,47 @@ export function BillOverviewPage() {
         </div>
       )}
 
+      {/* Call Adjustment Banner */}
+      {bill?.call_adjustments && (
+        <div className="mb-8 p-6 border border-green-500/30 rounded-lg bg-green-500/5">
+          <div className="flex items-center gap-3 mb-3">
+            <PhoneCall className="w-5 h-5 text-green-400" strokeWidth={1.5} />
+            <h2 className="text-lg font-medium text-green-400">Updated After Call</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-3">{bill.call_adjustments.savings_summary}</p>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Total Billed</p>
+              <p className="text-sm">
+                <span className="line-through text-muted-foreground">${bill.call_adjustments.previous_total_billed.toLocaleString()}</span>
+                {" → "}
+                <span className="text-green-400 font-medium">${bill.call_adjustments.new_total_billed.toLocaleString()}</span>
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Your Responsibility</p>
+              <p className="text-sm">
+                <span className="line-through text-muted-foreground">${bill.call_adjustments.previous_patient_balance.toLocaleString()}</span>
+                {" → "}
+                <span className="text-green-400 font-medium">${bill.call_adjustments.new_patient_balance.toLocaleString()}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Total Bill Summary */}
       <div className="grid md:grid-cols-3 gap-6 mb-12">
         <div className="p-6 border border-border rounded-lg bg-card">
           <p className="text-sm text-muted-foreground mb-2">Total Billed</p>
-          <p className="text-3xl">${totalBilled.toLocaleString()}</p>
+          {bill?.call_adjustments ? (
+            <>
+              <p className="text-xl line-through text-muted-foreground">${totalBilled.toLocaleString()}</p>
+              <p className="text-3xl text-green-400">${bill.call_adjustments.new_total_billed.toLocaleString()}</p>
+            </>
+          ) : (
+            <p className="text-3xl">${totalBilled.toLocaleString()}</p>
+          )}
         </div>
         <div className="p-6 border border-border rounded-lg bg-card">
           <p className="text-sm text-muted-foreground mb-2">Insurance Paid</p>
@@ -85,7 +121,14 @@ export function BillOverviewPage() {
         </div>
         <div className="p-6 border border-border rounded-lg bg-card">
           <p className="text-sm text-muted-foreground mb-2">Your Responsibility</p>
-          <p className="text-3xl">${patientResponsibility.toLocaleString()}</p>
+          {bill?.call_adjustments ? (
+            <>
+              <p className="text-xl line-through text-muted-foreground">${patientResponsibility.toLocaleString()}</p>
+              <p className="text-3xl text-green-400">${bill.call_adjustments.new_patient_balance.toLocaleString()}</p>
+            </>
+          ) : (
+            <p className="text-3xl">${patientResponsibility.toLocaleString()}</p>
+          )}
         </div>
       </div>
 
@@ -97,7 +140,14 @@ export function BillOverviewPage() {
             <div className="flex items-center gap-4">
               <div className="w-32 text-sm text-muted-foreground">Total Billed</div>
               <div className="flex-1 h-12 bg-secondary rounded flex items-center px-4">
-                ${totalBilled.toLocaleString()}
+                {bill?.call_adjustments ? (
+                  <>
+                    <span className="line-through text-muted-foreground mr-3">${totalBilled.toLocaleString()}</span>
+                    <span className="text-green-400 font-medium">${bill.call_adjustments.new_total_billed.toLocaleString()}</span>
+                  </>
+                ) : (
+                  <>${totalBilled.toLocaleString()}</>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -109,7 +159,14 @@ export function BillOverviewPage() {
             <div className="border-t border-border pt-6 flex items-center gap-4">
               <div className="w-32 text-sm font-medium">You Pay</div>
               <div className="flex-1 h-12 bg-accent border border-border rounded flex items-center px-4 font-medium">
-                ${patientResponsibility.toLocaleString()}
+                {bill?.call_adjustments ? (
+                  <>
+                    <span className="line-through text-muted-foreground mr-3">${patientResponsibility.toLocaleString()}</span>
+                    <span className="text-green-400">${bill.call_adjustments.new_patient_balance.toLocaleString()}</span>
+                  </>
+                ) : (
+                  <>${patientResponsibility.toLocaleString()}</>
+                )}
               </div>
             </div>
           </div>

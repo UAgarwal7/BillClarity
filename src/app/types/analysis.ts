@@ -33,6 +33,8 @@ export interface InsuranceInsight {
   applicability: string;
   strength: InsightStrength;
   appeal_strategy: string;
+  resolved_by_call?: boolean;
+  call_id?: string;
 }
 
 export interface AppealTrigger {

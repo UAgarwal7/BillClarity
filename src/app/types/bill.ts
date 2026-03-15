@@ -16,6 +16,15 @@ export interface ConfidenceScores {
   fields: Record<string, number>;
 }
 
+export interface CallAdjustments {
+  previous_total_billed: number;
+  new_total_billed: number;
+  previous_patient_balance: number;
+  new_patient_balance: number;
+  savings_summary: string;
+  call_id: string;
+}
+
 export interface Bill {
   _id: string;
   user_id: string;
@@ -34,6 +43,7 @@ export interface Bill {
   confidence_scores: ConfidenceScores;
   plain_language_summary: string | null;
   user_notes: string | null;
+  call_adjustments?: CallAdjustments;
   created_at: string;
   updated_at: string;
 }

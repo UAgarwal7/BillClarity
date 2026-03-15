@@ -8,6 +8,7 @@ interface BillContextValue {
   bill: Bill | null;
   billLoading: boolean;
   billError: string | null;
+  refreshBill: () => Promise<void>;
 }
 
 const BillContext = createContext<BillContextValue>({
@@ -16,6 +17,7 @@ const BillContext = createContext<BillContextValue>({
   bill: null,
   billLoading: false,
   billError: null,
+  refreshBill: async () => {},
 });
 
 export function BillProvider({ children }: { children: ReactNode }) {
@@ -83,8 +85,14 @@ export function BillProvider({ children }: { children: ReactNode }) {
     };
   }, [billId, bill?.parsing_status, fetchBill]);
 
+  const refreshBill = useCallback(async () => {
+    if (billId) {
+      await fetchBill(billId);
+    }
+  }, [billId, fetchBill]);
+
   return (
-    <BillContext.Provider value={{ billId, setBillId, bill, billLoading, billError }}>
+    <BillContext.Provider value={{ billId, setBillId, bill, billLoading, billError, refreshBill }}>
       {children}
     </BillContext.Provider>
   );

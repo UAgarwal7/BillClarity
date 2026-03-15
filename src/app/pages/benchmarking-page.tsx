@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2, PhoneCall } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useAnalysis } from "@/app/hooks/use-analysis";
 
@@ -102,12 +102,30 @@ export function BenchmarkingPage() {
             const isInRange = !isAboveRange && !isBelowRange;
             const deviation = isAboveRange ? item.billed_amount - item.typical_high : 0;
 
+            const cr = item.call_resolution;
+            const isResolved = cr?.status === "resolved";
+            const isAdjusted = cr?.status === "adjusted";
+
             return (
-              <div key={item._id} className="p-6 border border-border rounded-lg bg-card">
+              <div key={item._id} className={`p-6 border rounded-lg bg-card ${isResolved ? "border-green-500/30 opacity-60" : "border-border"}`}>
                 <div className="mb-6">
                   <div className="flex items-start justify-between gap-4 mb-2">
-                    <h3>{item.code}</h3>
-                    {deviation > 0 && (
+                    <div className="flex items-center gap-3">
+                      <h3 className={isResolved ? "line-through" : ""}>{item.code}</h3>
+                      {isResolved && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-500/10 text-green-400 border border-green-500/20">
+                          <PhoneCall className="w-3 h-3" strokeWidth={2} />
+                          Resolved
+                        </span>
+                      )}
+                      {isAdjusted && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                          <PhoneCall className="w-3 h-3" strokeWidth={2} />
+                          Adjusted
+                        </span>
+                      )}
+                    </div>
+                    {deviation > 0 && !isResolved && (
                       <span className="px-3 py-1 rounded-full text-xs bg-destructive/10 text-destructive border border-destructive/20">
                         ${deviation.toLocaleString()} above range
                       </span>
@@ -115,9 +133,19 @@ export function BenchmarkingPage() {
                   </div>
                   <div className="flex items-baseline gap-4 text-sm">
                     <span className="text-muted-foreground">Your charge:</span>
-                    <span className="font-medium text-lg">${item.billed_amount.toLocaleString()}</span>
+                    {isAdjusted && cr ? (
+                      <>
+                        <span className="font-medium text-lg line-through text-muted-foreground">${cr.previous_amount.toLocaleString()}</span>
+                        <span className="font-medium text-lg text-green-400">${cr.new_amount.toLocaleString()}</span>
+                      </>
+                    ) : (
+                      <span className={`font-medium text-lg ${isResolved ? "line-through text-muted-foreground" : ""}`}>${item.billed_amount.toLocaleString()}</span>
+                    )}
                     <span className="text-xs text-muted-foreground">Source: {item.benchmark_source}</span>
                   </div>
+                  {cr?.note && (
+                    <p className="text-sm text-green-400/80 mt-2">{cr.note}</p>
+                  )}
                 </div>
 
                 <div className="space-y-3">

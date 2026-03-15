@@ -1,4 +1,4 @@
-import { FileText, AlertCircle, Loader2 } from "lucide-react";
+import { FileText, AlertCircle, Loader2, PhoneCall, CheckCircle } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useAnalysis } from "@/app/hooks/use-analysis";
 import type { InsuranceInsight, AppealTrigger } from "@/app/types/analysis";
@@ -114,6 +114,8 @@ export function InsuranceInsightsPage() {
 }
 
 function InsightCard({ insight }: { insight: InsuranceInsight }) {
+  const isResolved = insight.resolved_by_call === true;
+
   const strengthStyles: Record<string, string> = {
     strong: "bg-destructive/10 text-destructive border border-destructive/20",
     moderate: "bg-primary/10 text-primary border border-primary/20",
@@ -121,25 +123,37 @@ function InsightCard({ insight }: { insight: InsuranceInsight }) {
   };
 
   return (
-    <div className="p-6 border border-border rounded-lg bg-card">
+    <div className={`p-6 border rounded-lg bg-card ${isResolved ? "border-green-500/30 opacity-60" : "border-border"}`}>
       <div className="flex items-start gap-4">
         <div className="mt-1">
-          <AlertCircle className="w-6 h-6 text-primary" strokeWidth={1.5} />
+          {isResolved ? (
+            <CheckCircle className="w-6 h-6 text-green-400" strokeWidth={1.5} />
+          ) : (
+            <AlertCircle className="w-6 h-6 text-primary" strokeWidth={1.5} />
+          )}
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <h3>{insight.rule}</h3>
+            <h3 className={isResolved ? "line-through" : ""}>{insight.rule}</h3>
             <span className={`px-3 py-1 rounded-full text-xs ${strengthStyles[insight.strength] ?? ""}`}>
               {insight.strength}
             </span>
+            {isResolved && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-500/10 text-green-400 border border-green-500/20">
+                <PhoneCall className="w-3 h-3" strokeWidth={2} />
+                Resolved via Call
+              </span>
+            )}
           </div>
-          <p className="text-muted-foreground mb-4 leading-relaxed">{insight.description}</p>
-          <div className="p-4 bg-secondary/50 rounded-md border-l-2 border-primary">
-            <p className="text-sm">
-              <strong className="text-foreground">Strategy:</strong>{" "}
-              <span className="text-muted-foreground">{insight.appeal_strategy}</span>
-            </p>
-          </div>
+          <p className={`mb-4 leading-relaxed ${isResolved ? "text-muted-foreground/50" : "text-muted-foreground"}`}>{insight.description}</p>
+          {!isResolved && (
+            <div className="p-4 bg-secondary/50 rounded-md border-l-2 border-primary">
+              <p className="text-sm">
+                <strong className="text-foreground">Strategy:</strong>{" "}
+                <span className="text-muted-foreground">{insight.appeal_strategy}</span>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

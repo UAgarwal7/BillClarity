@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, AlertCircle, CheckCircle, Download, Mail, Loader2 } from "lucide-react";
+import { FileText, AlertCircle, CheckCircle, Download, Mail, Loader2, PhoneCall, RefreshCw } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useAppealPacket } from "@/app/hooks/use-appeal-packet";
 import { MarkdownContent } from "@/app/components/ui/markdown-content";
@@ -43,9 +43,10 @@ const SECTION_META: Record<string, { title: string; description: string; icon: R
 };
 
 export function AppealPacketPage() {
-  const { billId } = useBillContext();
+  const { billId, bill } = useBillContext();
   const { packet, loading, initialLoading, generating, error, generate, exportPdf } = useAppealPacket(billId);
   const [downloadingSection, setDownloadingSection] = useState<string | null>(null);
+  const hasCallUpdates = Boolean(bill?.call_adjustments);
 
   const handleDownloadSection = async (sectionKey: string) => {
     if (!packet) return;
@@ -156,18 +157,51 @@ export function AppealPacketPage() {
             </button>
           </div>
 
+          {/* Regenerate banner after call updates */}
+          {hasCallUpdates && (
+            <div className="mb-6 p-4 border border-green-500/30 rounded-lg bg-green-500/5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <PhoneCall className="w-5 h-5 text-green-400" strokeWidth={1.5} />
+                <span className="text-sm text-muted-foreground">
+                  Call outcomes may have changed some sections. Regenerate to update.
+                </span>
+              </div>
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="px-4 py-2 text-sm border border-green-500/30 rounded-md hover:bg-green-500/10 transition-colors inline-flex items-center gap-2 text-green-400 disabled:opacity-50"
+              >
+                {generating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" strokeWidth={1.5} />
+                )}
+                Regenerate
+              </button>
+            </div>
+          )}
+
           {/* Individual Sections */}
           <div className="space-y-6">
             {DEFAULT_SECTIONS.map((key) => {
               const meta = SECTION_META[key];
               const content = packet.sections[key];
               if (!meta) return null;
+              const affectedByCall = hasCallUpdates && ["flagged_issues", "benchmark_analysis", "insurance_insights", "appeal_letter", "negotiation_script"].includes(key);
               return (
-                <div key={key} className="p-6 border border-border rounded-lg bg-card">
+                <div key={key} className={`p-6 border rounded-lg bg-card ${affectedByCall ? "border-green-500/20" : "border-border"}`}>
                   <div className="flex items-start gap-4">
                     <div className="p-3 bg-secondary rounded-lg text-primary">{meta.icon}</div>
                     <div className="flex-1">
-                      <h3 className="mb-2">{meta.title}</h3>
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3>{meta.title}</h3>
+                        {affectedByCall && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-500/10 text-green-400 border border-green-500/20">
+                            <PhoneCall className="w-3 h-3" strokeWidth={2} />
+                            Updated after call
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                         {meta.description}
                       </p>

@@ -2,6 +2,14 @@
 
 export type BenchmarkRiskLevel = "normal" | "elevated" | "extreme";
 
+export interface BenchmarkCallResolution {
+  status: "resolved" | "adjusted" | "denied";
+  previous_amount: number;
+  new_amount: number;
+  note: string;
+  call_id: string;
+}
+
 export interface BenchmarkResult {
   _id: string;
   line_item_id: string;
@@ -16,6 +24,7 @@ export interface BenchmarkResult {
   deviation_percentage: number;
   deviation_score: number;
   risk_level: BenchmarkRiskLevel;
+  call_resolution?: BenchmarkCallResolution;
 }
 
 export interface BenchmarkSummary {

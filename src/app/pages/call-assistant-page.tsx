@@ -2,12 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Phone,
   PhoneOff,
-  Pause,
-  Play,
-  Send,
-  Download,
   Clock,
-  FileText,
   Loader2,
   Bug,
   ChevronDown,
@@ -18,6 +13,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
+  Mic,
+  Volume2,
 } from "lucide-react";
 import { useBillContext } from "@/app/context/bill-context";
 import { useCallSession } from "@/app/hooks/use-call-session";
@@ -25,10 +22,10 @@ import type { DebugLogEntry } from "@/app/hooks/use-call-session";
 import type { TranscriptEntry, CallSummary, CallSession } from "@/app/types/call";
 import { callApi } from "@/app/services/call-api";
 
-type PageView = "history" | "new-call" | "active-call" | "view-call";
+type PageView = "history" | "active-call" | "view-call";
 
 export function CallAssistantPage() {
-  const { billId } = useBillContext();
+  const { billId, refreshBill } = useBillContext();
   const callSession = useCallSession(billId);
 
   const [view, setView] = useState<PageView>("history");
@@ -37,7 +34,6 @@ export function CallAssistantPage() {
   const [selectedCall, setSelectedCall] = useState<CallSession | null>(null);
   const [loadingCallDetail, setLoadingCallDetail] = useState(false);
 
-  const [isPaused, setIsPaused] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [durationInterval, setDurationInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const [showDebug, setShowDebug] = useState(false);
@@ -72,16 +68,11 @@ export function CallAssistantPage() {
     }
   };
 
-  const handleNewCall = () => {
+  const handleStartCall = async () => {
     callSession.reset();
     setCallDuration(0);
-    setIsPaused(false);
-    setView("new-call");
-  };
-
-  const handleStartCall = async () => {
-    await callSession.startCall();
     setView("active-call");
+    await callSession.startCall();
     const interval = setInterval(() => setCallDuration((d) => d + 1), 1000);
     setDurationInterval(interval);
   };
@@ -93,7 +84,17 @@ export function CallAssistantPage() {
     }
     await callSession.endCall();
     await fetchHistory();
+    await refreshBill();
   };
+
+  useEffect(() => {
+    if (callSession.callEnded && durationInterval) {
+      clearInterval(durationInterval);
+      setDurationInterval(null);
+      fetchHistory();
+      refreshBill();
+    }
+  }, [callSession.callEnded, durationInterval, fetchHistory, refreshBill]);
 
   const handleBackToHistory = () => {
     callSession.reset();
@@ -123,7 +124,7 @@ export function CallAssistantPage() {
           <div>
             <h1 className="text-3xl mb-2">Call Assistant</h1>
             <p className="text-muted-foreground">
-              AI-assisted phone negotiation with billing departments.
+              AI-powered voice negotiation with billing departments.
             </p>
           </div>
           {view !== "history" && (
@@ -144,36 +145,33 @@ export function CallAssistantPage() {
           loading={loadingHistory}
           loadingCallId={loadingCallDetail ? "loading" : null}
           onViewCall={handleViewCall}
-          onNewCall={handleNewCall}
-        />
-      )}
-
-      {view === "new-call" && (
-        <CallPreparation
-          session={callSession.session}
-          loading={callSession.loading}
-          loadingStep={callSession.loadingStep}
-          onStartCall={handleStartCall}
+          onNewCall={handleStartCall}
+          startingCall={callSession.loading}
         />
       )}
 
       {view === "active-call" && (
         <>
-          <ActiveCall
+          <VoiceCall
             transcript={callSession.transcript}
-            aiResponse={callSession.aiResponse}
             duration={formatDuration(callDuration)}
-            isPaused={isPaused}
             connected={callSession.connected}
-            onPause={() => setIsPaused(!isPaused)}
-            onSendMessage={callSession.sendMessage}
+            listening={callSession.listening}
+            aiSpeaking={callSession.aiSpeaking}
+            waitingForAi={callSession.waitingForAi}
+            loading={callSession.loading}
+            loadingStep={callSession.loadingStep}
+            callEnded={callSession.callEnded}
             onEndCall={handleEndCall}
+            onNewCall={handleStartCall}
+            onBackToHistory={handleBackToHistory}
           />
           {callSession.session?.summary && (
             <PostCallSummary
               session={callSession.session}
               transcript={callSession.transcript}
               onBackToHistory={handleBackToHistory}
+              onNewCall={handleStartCall}
             />
           )}
         </>
@@ -183,7 +181,7 @@ export function CallAssistantPage() {
         <CallDetailView call={selectedCall} onBack={handleBackToHistory} />
       )}
 
-      {callSession.debugLog.length > 0 && (view === "new-call" || view === "active-call") && (
+      {callSession.debugLog.length > 0 && view === "active-call" && (
         <div className="mt-8 border border-border rounded-lg bg-card">
           <button
             onClick={() => setShowDebug(!showDebug)}
@@ -202,6 +200,220 @@ export function CallAssistantPage() {
   );
 }
 
+/* ─── Voice Call (active) ─── */
+
+function VoiceCall({
+  transcript,
+  duration,
+  connected,
+  listening,
+  aiSpeaking,
+  waitingForAi,
+  loading,
+  loadingStep,
+  callEnded,
+  onEndCall,
+  onNewCall,
+  onBackToHistory,
+}: {
+  transcript: TranscriptEntry[];
+  duration: string;
+  connected: boolean;
+  listening: boolean;
+  aiSpeaking: boolean;
+  waitingForAi: boolean;
+  loading: boolean;
+  loadingStep: string | null;
+  callEnded: boolean;
+  onEndCall: () => void;
+  onNewCall: () => void;
+  onBackToHistory: () => void;
+}) {
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [transcript]);
+
+  const statusText = callEnded
+    ? "Call Ended"
+    : loading
+      ? (loadingStep || "Starting call…")
+      : aiSpeaking
+        ? "Patient is speaking…"
+        : waitingForAi
+          ? "Generating response…"
+          : listening
+            ? "Listening to you (insurance rep)…"
+            : connected
+              ? "Connected"
+              : "Connecting…";
+
+  const statusColor = callEnded
+    ? "text-muted-foreground"
+    : aiSpeaking
+      ? "text-blue-400"
+      : listening
+        ? "text-green-400"
+        : waitingForAi
+          ? "text-yellow-400"
+          : "text-muted-foreground";
+
+  return (
+    <>
+      {/* Call status bar */}
+      <div className={`mb-6 p-6 border rounded-lg ${callEnded ? "border-border bg-card" : "border-primary bg-primary/5"}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              {callEnded ? (
+                <CheckCircle2 className="w-5 h-5 text-green-400" strokeWidth={1.5} />
+              ) : loading ? (
+                <Loader2 className="w-5 h-5 animate-spin text-primary" strokeWidth={1.5} />
+              ) : aiSpeaking ? (
+                <Volume2 className="w-5 h-5 text-blue-400 animate-pulse" strokeWidth={1.5} />
+              ) : listening ? (
+                <Mic className="w-5 h-5 text-green-400 animate-pulse" strokeWidth={1.5} />
+              ) : waitingForAi ? (
+                <Loader2 className="w-5 h-5 animate-spin text-yellow-400" strokeWidth={1.5} />
+              ) : (
+                <div className={`w-3 h-3 rounded-full ${connected ? "bg-primary animate-pulse" : "bg-muted-foreground"}`} />
+              )}
+              <span className={`font-medium text-sm ${statusColor}`}>{statusText}</span>
+            </div>
+            {!loading && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Clock className="w-4 h-4" strokeWidth={1.5} />
+                <span className="text-sm font-mono">{duration}</span>
+              </div>
+            )}
+          </div>
+          {callEnded ? (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onNewCall}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2 text-sm"
+              >
+                <Phone className="w-4 h-4" strokeWidth={1.5} />
+                Call Again
+              </button>
+              <button
+                onClick={onBackToHistory}
+                className="px-4 py-2 border border-border rounded-md hover:bg-secondary transition-colors inline-flex items-center gap-2 text-sm"
+              >
+                <ArrowLeft className="w-4 h-4" strokeWidth={1.5} />
+                All Calls
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onEndCall}
+              disabled={loading}
+              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors inline-flex items-center gap-2 disabled:opacity-50"
+            >
+              <PhoneOff className="w-5 h-5" strokeWidth={1.5} />
+              End Call
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Visual indicator */}
+      <div className="mb-8 flex justify-center">
+        <div className="relative">
+          <div
+            className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
+              callEnded
+                ? "bg-green-500/10 ring-2 ring-green-500/30"
+                : aiSpeaking
+                  ? "bg-blue-500/20 ring-4 ring-blue-500/30"
+                  : listening
+                    ? "bg-green-500/20 ring-4 ring-green-500/30"
+                    : waitingForAi
+                      ? "bg-yellow-500/10 ring-2 ring-yellow-500/20"
+                      : "bg-secondary ring-2 ring-border"
+            }`}
+          >
+            {callEnded ? (
+              <CheckCircle2 className="w-12 h-12 text-green-400" strokeWidth={1.5} />
+            ) : aiSpeaking ? (
+              <Volume2 className="w-12 h-12 text-blue-400" strokeWidth={1.5} />
+            ) : listening ? (
+              <Mic className="w-12 h-12 text-green-400" strokeWidth={1.5} />
+            ) : waitingForAi ? (
+              <Loader2 className="w-12 h-12 text-yellow-400 animate-spin" strokeWidth={1.5} />
+            ) : loading ? (
+              <Loader2 className="w-12 h-12 text-primary animate-spin" strokeWidth={1.5} />
+            ) : (
+              <Phone className="w-12 h-12 text-muted-foreground" strokeWidth={1.5} />
+            )}
+          </div>
+          {!callEnded && (aiSpeaking || listening) && (
+            <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${aiSpeaking ? "bg-blue-500" : "bg-green-500"}`} />
+          )}
+        </div>
+      </div>
+
+      {/* Role labels */}
+      <div className="mb-4 flex justify-center gap-8 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-blue-400" />
+          <span className="text-muted-foreground">Patient (AI)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-green-400" />
+          <span className="text-muted-foreground">Insurance Rep (You)</span>
+        </div>
+      </div>
+
+      {/* Live transcript */}
+      <div className="border border-border rounded-lg bg-card">
+        <div className="p-4 border-b border-border">
+          <h2 className="text-lg font-medium">Live Transcript</h2>
+        </div>
+        <div className="p-6 max-h-96 overflow-y-auto">
+          {transcript.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">
+              {loading ? "Setting up the call…" : "Conversation will appear here…"}
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {transcript.map((item, index) => {
+                const isPatient = item.role === "agent" || item.role === "patient";
+                return (
+                  <div key={index} className={`flex ${isPatient ? "justify-start" : "justify-end"}`}>
+                    <div className={`max-w-[80%] ${isPatient ? "pr-8" : "pl-8"}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-2 h-2 rounded-full ${isPatient ? "bg-blue-400" : "bg-green-400"}`} />
+                        <span className="text-xs text-muted-foreground">
+                          {isPatient ? "Patient (AI)" : "Insurance Rep (You)"}
+                        </span>
+                      </div>
+                      <div
+                        className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${
+                          isPatient
+                            ? "bg-blue-500/10 border border-blue-500/20"
+                            : "bg-green-500/10 border border-green-500/20"
+                        }`}
+                      >
+                        {item.text}
+                        {item.streaming && (
+                          <span className="inline-block w-1.5 h-4 ml-0.5 bg-blue-400 animate-pulse align-middle" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={transcriptEndRef} />
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ─── Call History List ─── */
 
 function CallHistory({
@@ -210,12 +422,14 @@ function CallHistory({
   loadingCallId,
   onViewCall,
   onNewCall,
+  startingCall,
 }: {
   calls: CallSummary[];
   loading: boolean;
   loadingCallId: string | null;
   onViewCall: (id: string) => void;
   onNewCall: () => void;
+  startingCall: boolean;
 }) {
   const outcomeConfig: Record<string, { label: string; icon: typeof CheckCircle2; className: string }> = {
     resolved: { label: "Resolved", icon: CheckCircle2, className: "text-green-400 bg-green-400/10" },
@@ -229,11 +443,19 @@ function CallHistory({
       <div className="mb-6">
         <button
           onClick={onNewCall}
-          className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2"
+          disabled={startingCall}
+          className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2 disabled:opacity-50"
         >
-          <Plus className="w-5 h-5" strokeWidth={1.5} />
-          Start New Call
+          {startingCall ? (
+            <Loader2 className="w-5 h-5 animate-spin" strokeWidth={1.5} />
+          ) : (
+            <Plus className="w-5 h-5" strokeWidth={1.5} />
+          )}
+          {startingCall ? "Starting Call…" : "Start New Call"}
         </button>
+        <p className="mt-2 text-xs text-muted-foreground">
+          You play the insurance rep. The AI speaks as the patient via voice.
+        </p>
       </div>
 
       {loading ? (
@@ -245,7 +467,7 @@ function CallHistory({
           <PhoneCall className="w-12 h-12 mx-auto mb-4 text-muted-foreground" strokeWidth={1.5} />
           <h2 className="text-xl mb-2">No calls yet</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Start your first AI-assisted call to negotiate your medical bill. The AI will generate a strategy and guide you through the conversation.
+            Start a voice call to hear the AI negotiate your medical bill as the patient. You'll play the role of the insurance representative.
           </p>
         </div>
       ) : (
@@ -346,7 +568,6 @@ function CallDetailView({ call, onBack }: { call: CallSession; onBack: () => voi
 
   return (
     <>
-      {/* Header */}
       <div className="mb-8 p-6 border border-border rounded-lg bg-card">
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -384,15 +605,15 @@ function CallDetailView({ call, onBack }: { call: CallSession; onBack: () => voi
         )}
       </div>
 
-      {/* Strategy */}
-      <div className="mb-8">
-        <h2 className="text-2xl mb-4">Strategy Used</h2>
-        <div className="p-6 border border-border rounded-lg bg-card">
-          <p className="leading-relaxed text-muted-foreground">{call.strategy}</p>
+      {call.strategy && (
+        <div className="mb-8">
+          <h2 className="text-2xl mb-4">Strategy Used</h2>
+          <div className="p-6 border border-border rounded-lg bg-card">
+            <p className="leading-relaxed text-muted-foreground">{call.strategy}</p>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Next Steps */}
       {call.next_steps && (
         <div className="mb-8">
           <h2 className="text-2xl mb-4">Recommended Next Steps</h2>
@@ -404,45 +625,49 @@ function CallDetailView({ call, onBack }: { call: CallSession; onBack: () => voi
         </div>
       )}
 
-      {/* Transcript */}
       {call.transcript && call.transcript.length > 0 && (
         <div className="mb-8">
           <h2 className="text-2xl mb-4">Full Transcript</h2>
           <div className="border border-border rounded-lg bg-card p-6">
             <div className="space-y-4">
-              {call.transcript.map((item, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-1 rounded text-xs ${
-                        item.role === "agent" || item.role === "patient"
-                          ? "bg-primary/10 text-primary"
-                          : "bg-secondary text-muted-foreground"
-                      }`}
-                    >
-                      {item.role === "agent" || item.role === "patient" ? "You" : "Representative"}
-                    </span>
-                    {item.timestamp && (
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(item.timestamp).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })}
-                      </span>
-                    )}
+              {call.transcript.map((item, index) => {
+                const isPatient = item.role === "agent" || item.role === "patient";
+                return (
+                  <div key={index} className={`flex ${isPatient ? "justify-start" : "justify-end"}`}>
+                    <div className={`max-w-[80%] ${isPatient ? "pr-8" : "pl-8"}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-2 h-2 rounded-full ${isPatient ? "bg-blue-400" : "bg-green-400"}`} />
+                        <span className="text-xs text-muted-foreground">
+                          {isPatient ? "Patient (AI)" : "Insurance Rep"}
+                        </span>
+                        {item.timestamp && (
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(item.timestamp).toLocaleTimeString("en-US", {
+                              hour: "numeric",
+                              minute: "2-digit",
+                              second: "2-digit",
+                            })}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${
+                          isPatient
+                            ? "bg-blue-500/10 border border-blue-500/20"
+                            : "bg-green-500/10 border border-green-500/20"
+                        }`}
+                      >
+                        {item.text}
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-sm leading-relaxed pl-2 border-l-2 border-border">
-                    {item.text}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
-      {/* Back */}
       <div className="text-center">
         <button
           onClick={onBack}
@@ -456,298 +681,21 @@ function CallDetailView({ call, onBack }: { call: CallSession; onBack: () => voi
   );
 }
 
-/* ─── Debug Panel ─── */
-
-function DebugPanel({ entries }: { entries: DebugLogEntry[] }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [entries]);
-
-  const typeColors: Record<string, string> = {
-    info: "text-blue-400",
-    send: "text-green-400",
-    recv: "text-yellow-400",
-    error: "text-red-400",
-    ws: "text-purple-400",
-  };
-
-  return (
-    <div
-      ref={scrollRef}
-      className="max-h-64 overflow-y-auto p-4 pt-0 font-mono text-xs leading-relaxed"
-    >
-      {entries.map((entry, i) => (
-        <div key={i} className="flex gap-2 py-0.5">
-          <span className="text-muted-foreground shrink-0">{entry.time}</span>
-          <span className={`shrink-0 uppercase w-10 ${typeColors[entry.type] ?? "text-muted-foreground"}`}>
-            {entry.type}
-          </span>
-          <span className="text-foreground/80 break-all">{entry.message}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ─── Call Preparation (new call) ─── */
-
-function CallPreparation({
-  session,
-  loading,
-  loadingStep,
-  onStartCall,
-}: {
-  session: ReturnType<typeof useCallSession>["session"];
-  loading: boolean;
-  loadingStep: string | null;
-  onStartCall: () => void;
-}) {
-  return (
-    <>
-      {session && (
-        <>
-          <div className="mb-8">
-            <h2 className="text-2xl mb-4">Recommended Strategy</h2>
-            <div className="p-6 border border-border rounded-lg bg-card">
-              <p className="leading-relaxed text-muted-foreground">{session.strategy}</p>
-            </div>
-          </div>
-
-          <div className="mb-8">
-            <h2 className="text-2xl mb-4">Opening Script</h2>
-            <div className="p-6 border border-border rounded-lg bg-card">
-              <p className="leading-relaxed text-muted-foreground">{session.initial_script}</p>
-            </div>
-          </div>
-        </>
-      )}
-
-      <div className="p-8 border-2 border-border rounded-lg bg-secondary/30 text-center">
-        <Phone className="w-12 h-12 mx-auto mb-4 text-primary" strokeWidth={1.5} />
-        <h2 className="text-2xl mb-3">Ready to Start?</h2>
-        <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-          The AI assistant will guide the conversation based on your billing analysis and
-          recommended strategy.
-        </p>
-        <button
-          onClick={onStartCall}
-          disabled={loading}
-          className="px-8 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2 disabled:opacity-50"
-        >
-          {loading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Phone className="w-5 h-5" strokeWidth={1.5} />
-          )}
-          {loading ? "Starting…" : "Start AI-Assisted Call"}
-        </button>
-        {loading && loadingStep && (
-          <p className="mt-3 text-sm text-muted-foreground animate-pulse">{loadingStep}</p>
-        )}
-      </div>
-    </>
-  );
-}
-
-/* ─── Active Call ─── */
-
-function ActiveCall({
-  transcript,
-  aiResponse,
-  duration,
-  isPaused,
-  connected,
-  onPause,
-  onSendMessage,
-  onEndCall,
-}: {
-  transcript: TranscriptEntry[];
-  aiResponse: string | null;
-  duration: string;
-  isPaused: boolean;
-  connected: boolean;
-  onPause: () => void;
-  onSendMessage: (text: string, role?: "patient" | "representative") => void;
-  onEndCall: () => void;
-}) {
-  const [inputText, setInputText] = useState("");
-  const [inputRole, setInputRole] = useState<"patient" | "representative">("representative");
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [transcript]);
-
-  const handleSend = () => {
-    if (!inputText.trim()) return;
-    onSendMessage(inputText.trim(), inputRole);
-    setInputText("");
-  };
-
-  return (
-    <>
-      {/* Call Status */}
-      <div className="mb-6 p-6 border border-primary rounded-lg bg-primary/5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${connected ? "bg-primary animate-pulse" : "bg-muted-foreground"}`} />
-              <span className="font-medium">{connected ? "Call Active" : "Connecting…"}</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Clock className="w-4 h-4" strokeWidth={1.5} />
-              <span className="text-sm font-mono">{duration}</span>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={onPause}
-              className="p-2 border border-border rounded-md hover:bg-secondary transition-colors"
-              aria-label={isPaused ? "Resume" : "Pause"}
-            >
-              {isPaused ? (
-                <Play className="w-5 h-5" strokeWidth={1.5} />
-              ) : (
-                <Pause className="w-5 h-5" strokeWidth={1.5} />
-              )}
-            </button>
-            <button
-              onClick={onEndCall}
-              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors inline-flex items-center gap-2"
-            >
-              <PhoneOff className="w-5 h-5" strokeWidth={1.5} />
-              End Call
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6 mb-6">
-        {/* Transcript Panel */}
-        <div>
-          <h2 className="text-2xl mb-4">Live Transcript</h2>
-          <div className="border border-border rounded-lg bg-card p-6 h-96 overflow-y-auto">
-            {transcript.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Type what the billing representative says below, and the AI will suggest your response.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {transcript.map((item, index) => (
-                  <div key={index} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${
-                          item.role === "agent"
-                            ? "bg-primary/10 text-primary"
-                            : "bg-secondary text-muted-foreground"
-                        }`}
-                      >
-                        {item.role === "agent" ? "You" : "Representative"}
-                      </span>
-                    </div>
-                    <p className="text-sm leading-relaxed pl-2 border-l-2 border-border">
-                      {item.text}
-                    </p>
-                  </div>
-                ))}
-                <div ref={transcriptEndRef} />
-              </div>
-            )}
-          </div>
-
-          {/* Manual input */}
-          <div className="mt-3 space-y-2">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setInputRole("representative")}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
-                  inputRole === "representative"
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-secondary/50"
-                }`}
-              >
-                Rep said
-              </button>
-              <button
-                onClick={() => setInputRole("patient")}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
-                  inputRole === "patient"
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-secondary/50"
-                }`}
-              >
-                I said
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder={inputRole === "representative" ? "Type what the rep said…" : "Type what you said…"}
-                className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-background"
-              />
-              <button
-                onClick={handleSend}
-                className="px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 transition-colors inline-flex items-center gap-1"
-              >
-                <Send className="w-4 h-4" strokeWidth={1.5} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* AI Response Panel */}
-        <div>
-          <h2 className="text-2xl mb-4">Next AI Response</h2>
-          <div className="border border-border rounded-lg bg-card p-6">
-            <div className="mb-4">
-              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
-                Suggested Response
-              </span>
-            </div>
-            {aiResponse ? (
-              <p className="leading-relaxed mb-6">{aiResponse}</p>
-            ) : (
-              <p className="text-muted-foreground mb-6 text-sm">
-                Enter what the representative said to get an AI-suggested response.
-              </p>
-            )}
-            <div className="space-y-2">
-              <button
-                onClick={() => aiResponse && onSendMessage(aiResponse, "patient")}
-                disabled={!aiResponse}
-                className="w-full px-4 py-2.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                Use This Response
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-/* ─── Post-Call Summary (inline after ending) ─── */
+/* ─── Post-Call Summary ─── */
 
 function PostCallSummary({
   session,
   transcript,
   onBackToHistory,
+  onNewCall,
 }: {
   session: ReturnType<typeof useCallSession>["session"];
   transcript: TranscriptEntry[];
   onBackToHistory: () => void;
+  onNewCall: () => void;
 }) {
   return (
-    <>
+    <div className="mt-8">
       <div className="mb-8 p-6 border border-border rounded-lg bg-card">
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -785,43 +733,60 @@ function PostCallSummary({
         </div>
       )}
 
-      {transcript.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-2xl mb-4">Full Conversation Transcript</h2>
-          <div className="border border-border rounded-lg bg-card p-6">
-            <div className="space-y-4">
-              {transcript.map((item, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-1 rounded text-xs ${
-                        item.role === "agent"
-                          ? "bg-primary/10 text-primary"
-                          : "bg-secondary text-muted-foreground"
-                      }`}
-                    >
-                      {item.role === "agent" ? "You" : "Representative"}
-                    </span>
-                  </div>
-                  <p className="text-sm leading-relaxed pl-2 border-l-2 border-border">
-                    {item.text}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="flex gap-4 justify-center">
         <button
-          onClick={onBackToHistory}
+          onClick={onNewCall}
           className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors inline-flex items-center gap-2"
+        >
+          <Phone className="w-5 h-5" strokeWidth={1.5} />
+          Start New Call
+        </button>
+        <button
+          onClick={onBackToHistory}
+          className="px-6 py-3 border border-border rounded-md hover:bg-secondary transition-colors inline-flex items-center gap-2"
         >
           <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
           Back to All Calls
         </button>
       </div>
-    </>
+    </div>
+  );
+}
+
+/* ─── Debug Panel ─── */
+
+function DebugPanel({ entries }: { entries: DebugLogEntry[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [entries]);
+
+  const typeColors: Record<string, string> = {
+    info: "text-blue-400",
+    send: "text-green-400",
+    recv: "text-yellow-400",
+    error: "text-red-400",
+    ws: "text-purple-400",
+    audio: "text-cyan-400",
+  };
+
+  return (
+    <div
+      ref={scrollRef}
+      className="max-h-64 overflow-y-auto p-4 pt-0 font-mono text-xs leading-relaxed"
+    >
+      {entries.map((entry, i) => (
+        <div key={i} className="flex gap-2 py-0.5">
+          <span className="text-muted-foreground shrink-0">{entry.time}</span>
+          <span className={`shrink-0 uppercase w-12 ${typeColors[entry.type] ?? "text-muted-foreground"}`}>
+            {entry.type}
+          </span>
+          <span className="text-foreground/80 break-all">{entry.message}</span>
+        </div>
+      ))}
+    </div>
   );
 }
