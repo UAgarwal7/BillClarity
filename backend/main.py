@@ -1,5 +1,6 @@
 # BillClarity Backend
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +14,11 @@ from routers import bills, analysis, appeal_packets, calls, demo
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     await connect_db()
+    
+    # Start DB worker in background if in AWS mode to pick up extracted bills
+    from services.db_worker import resume_worker_loop
+    app.state.resume_worker_task = asyncio.create_task(resume_worker_loop())
+    
     yield
     await close_db()
 
@@ -36,7 +42,7 @@ app.add_middleware(
 # Routers
 app.include_router(bills.router, prefix="/api/bills", tags=["bills"])
 app.include_router(analysis.router, prefix="/api/bills", tags=["analysis"])
-app.include_router(appeal_packets.router, prefix="/api", tags=["appeal-packets"])
+app.include_router(appeal_packets.router, prefix="/api/appeal-packets", tags=["appeal-packets"])
 app.include_router(calls.router, prefix="/api/calls", tags=["calls"])
 app.include_router(demo.router, prefix="/api/demo", tags=["demo"])
 

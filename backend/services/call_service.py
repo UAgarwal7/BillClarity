@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime, timezone
-from services.gemini_service import generate_call_response, call_gemini, parse_gemini_json
+from services.gemini_service import json_dumps, generate_call_response, call_gemini, parse_gemini_json
 from services.elevenlabs_service import text_to_speech_base64
 from db.repositories import call_logs_repo, bills_repo, line_items_repo, benchmark_results_repo
 
@@ -30,10 +30,10 @@ Bill Info:
 - Patient Balance: ${bill_metadata.get('patient_balance', 0):,.2f}
 
 Errors Found:
-{json.dumps(errors[:5], indent=2)}
+{json_dumps(errors[:5], indent=2)}
 
 Benchmark Issues:
-{json.dumps([b for b in benchmarks if b.get('risk_level') in ('elevated', 'extreme')][:5], indent=2)}
+{json_dumps([b for b in benchmarks if b.get('risk_level') in ('elevated', 'extreme')][:5], indent=2)}
 
 Output as JSON:
 {{
@@ -102,7 +102,7 @@ async def process_transcript(
     # Generate AI response
     result = await generate_call_response(
         strategy=strategy,
-        key_points=json.dumps(key_points) if isinstance(key_points, list) else str(key_points),
+        key_points=json_dumps(key_points) if isinstance(key_points, list) else str(key_points),
         transcript=transcript,
         latest_message=text,
     )

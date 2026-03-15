@@ -5,6 +5,7 @@ import json
 import re
 import asyncio
 import google.generativeai as genai
+from datetime import datetime
 
 from config import settings
 
@@ -38,6 +39,19 @@ def load_prompt(name: str) -> str:
     """Load a prompt template from the prompts/ directory."""
     with open(os.path.join(PROMPTS_DIR, f"{name}.txt")) as f:
         return f.read()
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle datetime objects."""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+def json_dumps(obj, indent=None) -> str:
+    """Helper to dump JSON with datetime support."""
+    return json.dumps(obj, indent=indent, cls=DateTimeEncoder)
 
 
 def parse_gemini_json(text: str) -> dict | list:
@@ -100,7 +114,7 @@ async def generate_explanation(bill_metadata: dict, line_items: list) -> str:
         insurance_provider=bill_metadata.get("insurance_provider", ""),
         total_billed=bill_metadata.get("total_billed", 0),
         patient_balance=bill_metadata.get("patient_balance", 0),
-        line_items_json=json.dumps(line_items, indent=2),
+        line_items_json=json_dumps(line_items, indent=2),
     )
     return await call_gemini(prompt)
 
@@ -112,7 +126,7 @@ async def detect_errors_ai(bill_metadata: dict, line_items_with_flags: list) -> 
         facility=bill_metadata.get("facility", ""),
         visit_type=bill_metadata.get("visit_type", ""),
         insurance_provider=bill_metadata.get("insurance_provider", ""),
-        line_items_with_flags_json=json.dumps(line_items_with_flags, indent=2),
+        line_items_with_flags_json=json_dumps(line_items_with_flags, indent=2),
     )
     result = await call_gemini(prompt)
     return parse_gemini_json(result)
@@ -124,8 +138,8 @@ async def match_insurance_rules(bill_metadata: dict, line_items: list, errors: l
         visit_type=bill_metadata.get("visit_type", ""),
         insurance_provider=bill_metadata.get("insurance_provider", ""),
         date_range=str(bill_metadata.get("service_date_range", "")),
-        line_items_json=json.dumps(line_items, indent=2),
-        errors_json=json.dumps(errors, indent=2),
+        line_items_json=json_dumps(line_items, indent=2),
+        errors_json=json_dumps(errors, indent=2),
     )
     result = await call_gemini(prompt)
     return parse_gemini_json(result)
@@ -136,10 +150,10 @@ async def generate_appeal_letter(
 ) -> str:
     """Generate formal appeal letter."""
     prompt = load_prompt("generate_appeal_letter").format(
-        bill_metadata_json=json.dumps(bill_metadata, indent=2),
-        errors_json=json.dumps(errors, indent=2),
-        benchmarks_json=json.dumps(benchmarks, indent=2),
-        insights_json=json.dumps(insights, indent=2),
+        bill_metadata_json=json_dumps(bill_metadata, indent=2),
+        errors_json=json_dumps(errors, indent=2),
+        benchmarks_json=json_dumps(benchmarks, indent=2),
+        insights_json=json_dumps(insights, indent=2),
     )
     return await call_gemini(prompt)
 
@@ -149,10 +163,10 @@ async def generate_negotiation_script(
 ) -> str:
     """Generate phone negotiation script."""
     prompt = load_prompt("generate_negotiation_script").format(
-        bill_metadata_json=json.dumps(bill_metadata, indent=2),
-        errors_json=json.dumps(errors, indent=2),
-        benchmarks_json=json.dumps(benchmarks, indent=2),
-        insights_json=json.dumps(insights, indent=2),
+        bill_metadata_json=json_dumps(bill_metadata, indent=2),
+        errors_json=json_dumps(errors, indent=2),
+        benchmarks_json=json_dumps(benchmarks, indent=2),
+        insights_json=json_dumps(insights, indent=2),
     )
     return await call_gemini(prompt)
 
@@ -164,7 +178,7 @@ async def generate_call_response(
     prompt = load_prompt("generate_call_response").format(
         strategy=strategy,
         key_points=key_points,
-        transcript_array=json.dumps(transcript),
+        transcript_array=json_dumps(transcript),
         latest_representative_message=latest_message,
     )
     result = await call_gemini(prompt, use_model=call_model)

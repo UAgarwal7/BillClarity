@@ -67,6 +67,11 @@ async def run_parsing_pipeline(bill_id: str) -> None:
                 kv_pairs_json = first.get("kv_pairs_json", "{}")
 
             comprehend_data = bill.get("comprehend_results", {})
+            if isinstance(comprehend_data, list) and len(comprehend_data) > 0:
+                comprehend_data = comprehend_data[0]
+            elif isinstance(comprehend_data, list):
+                comprehend_data = {}
+                
             comprehend_context = entities_to_json_context(comprehend_data) if comprehend_data else "{}"
         else:
             # Local mode: run Textract + Comprehend ourselves
